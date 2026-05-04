@@ -145,3 +145,78 @@ body.today-sticky-popout .cm-gutters {
 body.today-sticky-popout .cm-content {
 	caret-color: var(--text-accent, #7c93cc);
 }
+
+/* ============ Embedded notes — compact "preview card" look ============ */
+/* Any ![[other-note]] embed in a sticky renders as a small, dim card by
+ * default and expands to full readable size on hover. This is the same
+ * visual treatment the old plugin-injected previous-note overlay had,
+ * but applied generically: write `![[yesterday]]` (or anything) in the
+ * sticky's content and you get the same effect, with no special code
+ * path for "today" or "previous date". */
+body.today-sticky-popout .markdown-embed {
+	max-height: 80px;
+	overflow: hidden;
+	opacity: 0.55;
+	font-size: 0.85em;
+	background: rgba(255, 255, 255, 0.025);
+	border: none !important;
+	border-radius: 6px;
+	padding: 4px 8px !important;
+	margin: 6px 0 !important;
+	position: relative;
+	transition: max-height 0.25s ease, opacity 0.18s ease, background 0.18s ease;
+}
+body.today-sticky-popout .markdown-embed::after {
+	/* fade-out gradient hints at clipped content below */
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 24px;
+	background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.3));
+	pointer-events: none;
+	transition: opacity 0.18s ease;
+}
+body.today-sticky-popout .markdown-embed:hover {
+	max-height: 320px;
+	overflow-y: auto;
+	opacity: 1;
+	background: rgba(255, 255, 255, 0.04);
+}
+body.today-sticky-popout .markdown-embed:hover::after {
+	opacity: 0;
+}
+
+body.today-sticky-popout .markdown-embed-title {
+	font-size: 0.82em;
+	font-weight: 500;
+	color: var(--text-faint, #777);
+	letter-spacing: 0.02em;
+	margin-bottom: 2px;
+	transition: color 0.12s ease;
+}
+body.today-sticky-popout .markdown-embed:hover .markdown-embed-title {
+	color: var(--text-accent, #7c93cc);
+}
+body.today-sticky-popout .markdown-embed-link {
+	opacity: 0.4;
+}
+body.today-sticky-popout .markdown-embed:hover .markdown-embed-link {
+	opacity: 0.8;
+}
+
+body.today-sticky-popout .markdown-embed-content {
+	font-size: 0.95em;
+	color: var(--text-muted, #aaa);
+}
+body.today-sticky-popout .markdown-embed-content > * {
+	margin-block-start: 0.15em !important;
+	margin-block-end: 0.15em !important;
+}
+body.today-sticky-popout .markdown-embed-content h1,
+body.today-sticky-popout .markdown-embed-content h2,
+body.today-sticky-popout .markdown-embed-content h3 {
+	font-size: 1em !important;
+	font-weight: 500 !important;
+}
