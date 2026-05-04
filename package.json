@@ -1,0 +1,24 @@
+{
+	"name": "today-sticky",
+	"version": "0.1.0",
+	"description": "Always-on-top floating window for today's daily note in Obsidian.",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+	},
+	"keywords": [],
+	"author": "zhuyinheng",
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^20.11.0",
+		"builtin-modules": "^3.3.0",
+		"esbuild": "^0.21.0",
+		"obsidian": "^1.5.7",
+		"tslib": "^2.6.2",
+		"typescript": "^5.4.0"
+	},
+	"dependencies": {
+		"obsidian-daily-notes-interface": "^0.9.4"
+	}
+}

@@ -1,0 +1,9 @@
+{
+	"id": "today-sticky",
+	"name": "Today's Note Sticky",
+	"version": "0.1.0",
+	"minAppVersion": "1.4.0",
+	"description": "Always-on-top floating window for today's daily note with the most recent previous daily note shown above as a read-only embed.",
+	"author": "zhuyinheng",
+	"isDesktopOnly": true
+}
