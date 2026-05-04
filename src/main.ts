@@ -13,35 +13,31 @@ const moment = obsMoment as unknown as () => Moment;
 
 interface StickySettings {
 	/** Last-used inner width of a sticky popout. Applied to the next open. */
-	width: number;
+	width?: number;
 	/** Last-used inner height of a sticky popout. */
-	height: number;
+	height?: number;
 }
 
-const DEFAULT_SETTINGS: StickySettings = {
-	width: 480,
-	height: 240,
-};
-
-export default class TodayStickyPlugin extends Plugin {
+export default class MyStickiesPlugin extends Plugin {
 	stickies!: StickyManager;
 	settings!: StickySettings;
+	private saveSizeTimer: number | null = null;
 
 	async onload() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign({}, await this.loadData());
 
 		this.stickies = new StickyManager(this);
 
 		this.addCommand({
-			id: "open-today-sticky",
+			id: "open-today",
 			name: "Open today's sticky window",
 			callback: () => {
-				void this.openTodaySticky();
+				void this.openTodayNoteAsSticky();
 			},
 		});
 
 		this.addCommand({
-			id: "open-current-as-sticky",
+			id: "open-current",
 			name: "Open current note as sticky",
 			checkCallback: (checking) => {
 				const file = this.activeMainFile();
@@ -52,17 +48,17 @@ export default class TodayStickyPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: "close-all-stickies",
+			id: "close-all",
 			name: "Close all sticky windows",
 			callback: () => {
 				const n = this.stickies.count();
 				this.stickies.closeAll();
-				new Notice(`Today's Note Sticky: closed ${n} window(s)`);
+				new Notice(`MyStickies: closed ${n} window(s)`);
 			},
 		});
 
 		this.addRibbonIcon("sticky-note", "Open today's sticky", () => {
-			void this.openTodaySticky();
+			void this.openTodayNoteAsSticky();
 		});
 
 		this.registerEvent(
@@ -81,35 +77,53 @@ export default class TodayStickyPlugin extends Plugin {
 		this.app.workspace.onLayoutReady(() => {
 			void (async () => {
 				this.killOrphanPopouts();
-				await this.openTodaySticky();
+				await this.openTodayNoteAsSticky();
 			})();
 		});
 	}
 
 	onunload() {
 		this.stickies?.closeAll();
+		this.flushStickySize();
 	}
 
 	/**
-	 * Save the size the user just resized a popout to. Applies to the NEXT
-	 * sticky open; never resizes already-open stickies. Single global value
-	 * (not per-file) — the sticky size is a UX preference, not a property of
-	 * individual notes. Debouncing happens at the caller in stickyWindow.
+	 * Remember the size the user just resized a popout to. This updates memory
+	 * immediately so the NEXT sticky open can use it, while the disk write is
+	 * debounced to avoid saveData churn during drag-resize.
 	 */
-	async saveStickySize(width: number, height: number): Promise<void> {
-		this.settings.width = width;
-		this.settings.height = height;
-		await this.saveData(this.settings);
+	rememberStickySize(width: number, height: number): void {
+		const size = readSize(width, height);
+		if (!size) return;
+		if (this.settings.width === size.width && this.settings.height === size.height) return;
+
+		this.settings.width = size.width;
+		this.settings.height = size.height;
+
+		if (this.saveSizeTimer !== null) window.clearTimeout(this.saveSizeTimer);
+		this.saveSizeTimer = window.setTimeout(() => {
+			this.saveSizeTimer = null;
+			void this.saveData(this.settings);
+		}, 500);
 	}
 
-	getStickySize(): { width: number; height: number } {
-		return { width: this.settings.width, height: this.settings.height };
+	flushStickySize(): void {
+		if (this.saveSizeTimer === null) return;
+		window.clearTimeout(this.saveSizeTimer);
+		this.saveSizeTimer = null;
+		void this.saveData(this.settings);
 	}
 
-	private async openTodaySticky(): Promise<void> {
+	getStickySize(): { width: number; height: number } | undefined {
+		const saved = readSize(this.settings.width, this.settings.height);
+		if (saved) return saved;
+		return readCssSize();
+	}
+
+	private async openTodayNoteAsSticky(): Promise<void> {
 		const file = await this.resolveTodayFile();
 		if (!file) {
-			new Notice("Today's Note Sticky: failed to open today's note.");
+			new Notice("MyStickies: failed to open today's note.");
 			return;
 		}
 		await this.stickies.openFile(file);
@@ -158,4 +172,24 @@ export default class TodayStickyPlugin extends Plugin {
 			closePopoutLeaf(leaf);
 		}
 	}
+}
+
+function readSize(width: unknown, height: unknown): { width: number; height: number } | undefined {
+	if (typeof width !== "number" || typeof height !== "number") return undefined;
+	if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return undefined;
+	return { width, height };
+}
+
+function readCssSize(): { width: number; height: number } | undefined {
+	const style = window.getComputedStyle(document.body);
+	const width = readCssNumber(style, "--mystickies-default-width");
+	const height = readCssNumber(style, "--mystickies-default-height");
+	return readSize(width, height);
+}
+
+function readCssNumber(style: CSSStyleDeclaration, name: string): number | undefined {
+	const raw = style.getPropertyValue(name).trim();
+	if (!raw) return undefined;
+	const value = Number.parseFloat(raw);
+	return Number.isFinite(value) ? value : undefined;
 }

@@ -1,13 +1,14 @@
 {
-	"name": "today-sticky",
+	"name": "mystickies",
 	"version": "0.1.0",
-	"description": "Always-on-top floating window for today's daily note in Obsidian.",
-	"main": "main.js",
+	"description": "Always-on-top floating sticky windows for Obsidian notes.",
+	"main": "dist/main.js",
 	"scripts": {
-		"dev": "node esbuild.config.mjs",
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"dev": "node scripts/esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node scripts/esbuild.config.mjs production",
+		"release:check": "npm run build && node scripts/release-check.mjs",
 		"vault": "open -a Obsidian /Users/zhuyinheng/obsidian_test_vault",
-		"snap": "screencapture -x /tmp/today-sticky-snap.png && echo \"Saved to /tmp/today-sticky-snap.png\""
+		"snap": "screencapture -x /tmp/mystickies-snap.png && echo \"Saved to /tmp/mystickies-snap.png\""
 	},
 	"keywords": [],
 	"author": "zhuyinheng",
@@ -22,5 +23,9 @@
 	},
 	"dependencies": {
 		"obsidian-daily-notes-interface": "^0.9.4"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/zhuyinheng/mystickies_obsidian_plugin.git"
 	}
 }

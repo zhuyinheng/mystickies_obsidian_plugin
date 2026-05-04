@@ -1,37 +1,42 @@
-/* Today's Note Sticky — popout window styles
+/* MyStickies — popout window styles
  * Goal: minimum visual interference. Default state shows almost no plugin
  * chrome; controls fade in only when the user hovers near them.
  */
 
+body {
+	--mystickies-default-width: 480px;
+	--mystickies-default-height: 240px;
+}
+
 /* ============ Hide all default Obsidian chrome inside the popout ============ */
-body.today-sticky-popout .titlebar,
-body.today-sticky-popout .titlebar-inner,
-body.today-sticky-popout .titlebar-text,
-body.today-sticky-popout .titlebar-button-container,
-body.today-sticky-popout .workspace-tab-header-container,
-body.today-sticky-popout .workspace-tab-header-container-inner,
-body.today-sticky-popout .workspace-tab-header,
-body.today-sticky-popout .workspace-tab-container-before,
-body.today-sticky-popout .workspace-tab-container-after,
-body.today-sticky-popout .workspace-ribbon,
-body.today-sticky-popout .view-header,
-body.today-sticky-popout .view-header-icon,
-body.today-sticky-popout .view-header-title-container,
-body.today-sticky-popout .view-actions,
-body.today-sticky-popout .status-bar,
-body.today-sticky-popout .inline-title,
-body.today-sticky-popout .embedded-backlinks,
-body.today-sticky-popout .mod-root > .workspace-split:not(.mod-vertical):not(.mod-horizontal) {
+body.mystickies-popout .titlebar,
+body.mystickies-popout .titlebar-inner,
+body.mystickies-popout .titlebar-text,
+body.mystickies-popout .titlebar-button-container,
+body.mystickies-popout .workspace-tab-header-container,
+body.mystickies-popout .workspace-tab-header-container-inner,
+body.mystickies-popout .workspace-tab-header,
+body.mystickies-popout .workspace-tab-container-before,
+body.mystickies-popout .workspace-tab-container-after,
+body.mystickies-popout .workspace-ribbon,
+body.mystickies-popout .view-header,
+body.mystickies-popout .view-header-icon,
+body.mystickies-popout .view-header-title-container,
+body.mystickies-popout .view-actions,
+body.mystickies-popout .status-bar,
+body.mystickies-popout .inline-title,
+body.mystickies-popout .embedded-backlinks,
+body.mystickies-popout .mod-root > .workspace-split:not(.mod-vertical):not(.mod-horizontal) {
 	display: none !important;
 }
 
 /* Belt-and-suspenders: zero out any nav header padding the tab strip would
  * normally reserve. */
-body.today-sticky-popout .workspace-leaf-content {
+body.mystickies-popout .workspace-leaf-content {
 	padding-top: 0 !important;
 }
 
-body.today-sticky-popout .titlebar {
+body.mystickies-popout .titlebar {
 	height: 0 !important;
 	min-height: 0 !important;
 }
@@ -40,56 +45,57 @@ body.today-sticky-popout .titlebar {
 /* Solid Obsidian theme bg (no more vibrancy/frosted glass). The window-
  * level setOpacity still makes the whole popout fade to translucent in
  * idle so other apps show through. */
-body.today-sticky-popout {
-	--today-sticky-idle-opacity: 0.5;
-	--today-sticky-active-opacity: 1;
-	--today-sticky-opacity-fade-ms: 10000ms;
+body.mystickies-popout {
+	--mystickies-idle-opacity: 0.5;
+	--mystickies-active-opacity: 1;
+	--mystickies-opacity-fade-in-ms: 180ms;
+	--mystickies-opacity-fade-out-ms: 5000ms;
 	background: var(--background-primary) !important;
 	border-radius: 12px;
 	overflow: hidden;
 }
-body.today-sticky-popout .app-container,
-body.today-sticky-popout .horizontal-main-container,
-body.today-sticky-popout .workspace,
-body.today-sticky-popout .workspace-split,
-body.today-sticky-popout .workspace-leaf,
-body.today-sticky-popout .workspace-leaf-content,
-body.today-sticky-popout .view-content,
-body.today-sticky-popout .markdown-source-view,
-body.today-sticky-popout .markdown-preview-view,
-body.today-sticky-popout .cm-editor,
-body.today-sticky-popout .cm-scroller,
-body.today-sticky-popout .cm-content {
+body.mystickies-popout .app-container,
+body.mystickies-popout .horizontal-main-container,
+body.mystickies-popout .workspace,
+body.mystickies-popout .workspace-split,
+body.mystickies-popout .workspace-leaf,
+body.mystickies-popout .workspace-leaf-content,
+body.mystickies-popout .view-content,
+body.mystickies-popout .markdown-source-view,
+body.mystickies-popout .markdown-preview-view,
+body.mystickies-popout .cm-editor,
+body.mystickies-popout .cm-scroller,
+body.mystickies-popout .cm-content {
 	background: transparent !important;
 }
 
 /* Mute editor scrollbar so it doesn't draw attention */
-body.today-sticky-popout ::-webkit-scrollbar {
+body.mystickies-popout ::-webkit-scrollbar {
 	width: 4px;
 	height: 4px;
 }
-body.today-sticky-popout ::-webkit-scrollbar-thumb {
+body.mystickies-popout ::-webkit-scrollbar-thumb {
 	background: var(--scrollbar-thumb-bg, rgba(255, 255, 255, 0.08));
 	border-radius: 2px;
 }
-body.today-sticky-popout ::-webkit-scrollbar-thumb:hover {
+body.mystickies-popout ::-webkit-scrollbar-thumb:hover {
 	background: var(--scrollbar-active-thumb-bg, rgba(255, 255, 255, 0.2));
 }
-body.today-sticky-popout ::-webkit-scrollbar-track {
+body.mystickies-popout ::-webkit-scrollbar-track {
 	background: transparent;
 }
 
 /* Reserve the 14px drag/title strip at the top of the editor area. */
-body.today-sticky-popout .horizontal-main-container,
-body.today-sticky-popout .app-container {
+body.mystickies-popout .horizontal-main-container,
+body.mystickies-popout .app-container {
 	padding-top: 14px;
 }
 
 /* ============ Always-visible 14px drag strip + right-aligned buttons ======
  * Theme-aware: uses Obsidian CSS variables so dark/light/custom themes all
- * blend in. The whole bar is the drag region (via the .today-sticky-drag
+ * blend in. The whole bar is the drag region (via the .mystickies-drag
  * spacer that fills the leftover space); buttons opt out with no-drag. */
-.today-sticky-topbar {
+.mystickies-topbar {
 	position: fixed;
 	top: 0;
 	left: 0;
@@ -106,7 +112,7 @@ body.today-sticky-popout .app-container {
 	padding: 0 2px;
 }
 
-.today-sticky-drag {
+.mystickies-drag {
 	flex: 1;
 	height: 100%;
 	-webkit-app-region: drag;
@@ -117,7 +123,7 @@ body.today-sticky-popout .app-container {
 
 /* File name shown in the drag region; this is the only visible "title" — the
  * editor's view-header is hidden so the filename doesn't get duplicated. */
-.today-sticky-title {
+.mystickies-title {
 	font-size: 9px;
 	font-weight: 500;
 	color: var(--text-muted);
@@ -131,7 +137,7 @@ body.today-sticky-popout .app-container {
 	-webkit-app-region: drag;
 }
 
-.today-sticky-btn {
+.mystickies-btn {
 	-webkit-app-region: no-drag;
 	width: 14px;
 	height: 14px;
@@ -150,46 +156,46 @@ body.today-sticky-popout .app-container {
 	opacity: 0.6;
 	transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
 }
-.today-sticky-btn:hover {
+.mystickies-btn:hover {
 	opacity: 1;
 	background: var(--background-modifier-hover, rgba(255, 255, 255, 0.12));
 	color: var(--text-normal);
 }
-.today-sticky-btn::before {
+.mystickies-btn::before {
 	display: block;
 	line-height: 14px;
 }
-.today-sticky-btn.pin::before {
+.mystickies-btn.pin::before {
 	content: "○";
 }
-.today-sticky-btn.pin.is-pinned::before {
+.mystickies-btn.pin.is-pinned::before {
 	content: "●";
 }
-.today-sticky-btn.go-main::before {
+.mystickies-btn.go-main::before {
 	content: "↗";
 }
-.today-sticky-btn.close::before {
+.mystickies-btn.close::before {
 	content: "×";
 }
-.today-sticky-btn.close:hover {
+.mystickies-btn.close:hover {
 	background: var(--background-modifier-error, rgba(220, 38, 38, 0.65));
 	color: var(--text-on-accent, #fff);
 }
 
 /* ============ Editor refinement ============ */
 /* Generous gutter so text doesn't crash into window edges */
-body.today-sticky-popout .markdown-source-view .cm-scroller,
-body.today-sticky-popout .markdown-preview-view {
+body.mystickies-popout .markdown-source-view .cm-scroller,
+body.mystickies-popout .markdown-preview-view {
 	padding: 4px 14px !important;
 }
 
 /* Hide editor line-number gutter for less visual noise */
-body.today-sticky-popout .cm-gutters {
+body.mystickies-popout .cm-gutters {
 	display: none !important;
 }
 
 /* Cursor / selection: keep visible against translucent bg */
-body.today-sticky-popout .cm-content {
+body.mystickies-popout .cm-content {
 	caret-color: var(--text-accent, #7c93cc);
 }
 
@@ -200,7 +206,7 @@ body.today-sticky-popout .cm-content {
  * but applied generically: write `![[yesterday]]` (or anything) in the
  * sticky's content and you get the same effect, with no special code
  * path for "today" or "previous date". */
-body.today-sticky-popout .markdown-embed {
+body.mystickies-popout .markdown-embed {
 	max-height: 48px;
 	overflow: hidden;
 	opacity: 0.5;
@@ -215,7 +221,7 @@ body.today-sticky-popout .markdown-embed {
 	position: relative;
 	transition: max-height 0.25s ease, opacity 0.18s ease, background 0.18s ease;
 }
-body.today-sticky-popout .markdown-embed::after {
+body.mystickies-popout .markdown-embed::after {
 	/* fade-out gradient hints at clipped content below */
 	content: "";
 	position: absolute;
@@ -227,17 +233,17 @@ body.today-sticky-popout .markdown-embed::after {
 	pointer-events: none;
 	transition: opacity 0.18s ease;
 }
-body.today-sticky-popout .markdown-embed:hover {
+body.mystickies-popout .markdown-embed:hover {
 	max-height: 220px;
 	overflow-y: auto;
 	opacity: 1;
 	background: var(--background-secondary, rgba(255, 255, 255, 0.04));
 }
-body.today-sticky-popout .markdown-embed:hover::after {
+body.mystickies-popout .markdown-embed:hover::after {
 	opacity: 0;
 }
 
-body.today-sticky-popout .markdown-embed-title {
+body.mystickies-popout .markdown-embed-title {
 	font-size: 0.95em; /* relative to embed wrapper (already 0.7em) */
 	font-weight: 500;
 	color: var(--text-faint);
@@ -245,31 +251,31 @@ body.today-sticky-popout .markdown-embed-title {
 	margin-bottom: 1px;
 	transition: color 0.12s ease;
 }
-body.today-sticky-popout .markdown-embed:hover .markdown-embed-title {
+body.mystickies-popout .markdown-embed:hover .markdown-embed-title {
 	color: var(--text-accent);
 }
-body.today-sticky-popout .markdown-embed-link {
+body.mystickies-popout .markdown-embed-link {
 	opacity: 0.4;
 }
-body.today-sticky-popout .markdown-embed:hover .markdown-embed-link {
+body.mystickies-popout .markdown-embed:hover .markdown-embed-link {
 	opacity: 0.8;
 }
 
-body.today-sticky-popout .markdown-embed-content {
+body.mystickies-popout .markdown-embed-content {
 	/* relative to embed wrapper (0.7em); inherits effective ~0.7em body */
 	font-size: 1em;
 	color: var(--text-muted);
 }
-body.today-sticky-popout .markdown-embed-content > * {
+body.mystickies-popout .markdown-embed-content > * {
 	margin-block-start: 0.1em !important;
 	margin-block-end: 0.1em !important;
 }
-body.today-sticky-popout .markdown-embed-content h1,
-body.today-sticky-popout .markdown-embed-content h2,
-body.today-sticky-popout .markdown-embed-content h3,
-body.today-sticky-popout .markdown-embed-content h4,
-body.today-sticky-popout .markdown-embed-content h5,
-body.today-sticky-popout .markdown-embed-content h6 {
+body.mystickies-popout .markdown-embed-content h1,
+body.mystickies-popout .markdown-embed-content h2,
+body.mystickies-popout .markdown-embed-content h3,
+body.mystickies-popout .markdown-embed-content h4,
+body.mystickies-popout .markdown-embed-content h5,
+body.mystickies-popout .markdown-embed-content h6 {
 	/* prevent embedded headings from blowing up beyond the host text size */
 	font-size: 1em !important;
 	font-weight: 500 !important;
@@ -281,7 +287,7 @@ body.today-sticky-popout .markdown-embed-content h6 {
  *  - max-height collapsed by default (only the heading visible)
  *  - dim opacity, smaller font
  *  - hover expands like an embed card */
-body.today-sticky-popout .metadata-container {
+body.mystickies-popout .metadata-container {
 	max-height: 22px;
 	overflow: hidden;
 	opacity: 0.4;
@@ -293,34 +299,34 @@ body.today-sticky-popout .metadata-container {
 	padding: 2px 6px !important;
 	transition: max-height 0.25s ease, opacity 0.18s ease, background 0.18s ease;
 }
-body.today-sticky-popout .metadata-container:hover {
+body.mystickies-popout .metadata-container:hover {
 	max-height: 240px;
 	overflow-y: auto;
 	opacity: 1;
 	background: var(--background-secondary, rgba(255, 255, 255, 0.04));
 }
-body.today-sticky-popout .metadata-properties-heading {
+body.mystickies-popout .metadata-properties-heading {
 	font-size: 0.85em;
 	color: var(--text-faint);
 	padding: 0 !important;
 	min-height: 16px !important;
 }
-body.today-sticky-popout .metadata-properties {
+body.mystickies-popout .metadata-properties {
 	font-size: 0.9em;
 }
-body.today-sticky-popout .metadata-property {
+body.mystickies-popout .metadata-property {
 	min-height: 18px !important;
 	padding: 1px 0 !important;
 }
-body.today-sticky-popout .metadata-property-key,
-body.today-sticky-popout .metadata-property-value {
+body.mystickies-popout .metadata-property-key,
+body.mystickies-popout .metadata-property-value {
 	font-size: 0.95em;
 }
 
 /* Source mode: dim the raw frontmatter --- block */
-body.today-sticky-popout .cm-line:has(.cm-hmd-frontmatter),
-body.today-sticky-popout .cm-line .HyperMD-frontmatter,
-body.today-sticky-popout .cm-hmd-frontmatter {
+body.mystickies-popout .cm-line:has(.cm-hmd-frontmatter),
+body.mystickies-popout .cm-line .HyperMD-frontmatter,
+body.mystickies-popout .cm-hmd-frontmatter {
 	opacity: 0.45;
 	font-size: 0.85em;
 }

@@ -1,11 +1,11 @@
 import { TFile } from "obsidian";
-import type TodayStickyPlugin from "./main";
+import type MyStickiesPlugin from "./main";
 import { StickyWindow } from "./stickyWindow";
 
 export class StickyManager {
 	private sticks = new Map<string, StickyWindow>();
 
-	constructor(private plugin: TodayStickyPlugin) {}
+	constructor(private plugin: MyStickiesPlugin) {}
 
 	async openFile(file: TFile): Promise<void> {
 		const existing = this.sticks.get(file.path);

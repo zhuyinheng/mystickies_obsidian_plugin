@@ -20,29 +20,29 @@ export function installChrome(
 	const doc = getPopoutDocument(leaf);
 	if (!doc) return () => {};
 
-	doc.body.classList.add("today-sticky-popout");
+	doc.body.classList.add("mystickies-popout");
 
 	const bar = doc.createElement("div");
-	bar.className = "today-sticky-topbar";
+	bar.className = "mystickies-topbar";
 
 	const drag = doc.createElement("div");
-	drag.className = "today-sticky-drag";
+	drag.className = "mystickies-drag";
 
 	const titleEl = doc.createElement("span");
-	titleEl.className = "today-sticky-title";
+	titleEl.className = "mystickies-title";
 	titleEl.textContent = title;
 	drag.appendChild(titleEl);
 
 	bar.appendChild(drag);
 
-	const pinBtn = makeBtn(doc, "today-sticky-btn pin", "Pinned (always on top)", () => {
+	const pinBtn = makeBtn(doc, "mystickies-btn pin", "Pinned (always on top)", () => {
 		updatePinBtn(pinBtn, callbacks.onTogglePin());
 	});
 	updatePinBtn(pinBtn, initialPinned);
 
-	const openMainBtn = makeBtn(doc, "today-sticky-btn go-main", "Open this note in the main Obsidian window", callbacks.onOpenInMain);
+	const openMainBtn = makeBtn(doc, "mystickies-btn go-main", "Open this note in the main Obsidian window", callbacks.onOpenInMain);
 
-	const closeBtn = makeBtn(doc, "today-sticky-btn close", "Close sticky", callbacks.onClose);
+	const closeBtn = makeBtn(doc, "mystickies-btn close", "Close sticky", callbacks.onClose);
 
 	bar.appendChild(pinBtn);
 	bar.appendChild(openMainBtn);
@@ -51,7 +51,7 @@ export function installChrome(
 
 	return () => {
 		bar.remove();
-		doc.body.classList.remove("today-sticky-popout");
+		doc.body.classList.remove("mystickies-popout");
 	};
 }
 

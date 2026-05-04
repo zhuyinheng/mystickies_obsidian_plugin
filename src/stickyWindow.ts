@@ -1,9 +1,10 @@
 import { Notice, TFile, WorkspaceLeaf } from "obsidian";
-import type TodayStickyPlugin from "./main";
+import type MyStickiesPlugin from "./main";
 import {
 	createStickyWindowControls,
 	getPopoutDocument,
 	getPopoutWindow,
+	type StickyWindowSize,
 	type StickyWindowControls,
 } from "./windowControls";
 import { installChrome } from "./chrome";
@@ -12,7 +13,8 @@ import type { StickyManager } from "./stickyManager";
 interface OpacitySettings {
 	idle: number;
 	active: number;
-	fadeMs: number;
+	fadeInMs: number;
+	fadeOutMs: number;
 }
 
 export class StickyWindow {
@@ -24,7 +26,7 @@ export class StickyWindow {
 	private cleanups: Array<() => void> = [];
 
 	constructor(
-		private plugin: TodayStickyPlugin,
+		private plugin: MyStickiesPlugin,
 		public readonly file: TFile,
 		private manager: StickyManager,
 	) {}
@@ -39,14 +41,16 @@ export class StickyWindow {
 			return;
 		}
 
-		const leaf = this.plugin.app.workspace.openPopoutLeaf({
-			size: this.plugin.getStickySize(),
-		});
+		const size = this.plugin.getStickySize();
+		const leaf = size
+			? this.plugin.app.workspace.openPopoutLeaf({ size })
+			: this.plugin.app.workspace.openPopoutLeaf();
 		await leaf.openFile(this.file, { active: true });
 		this.leaf = leaf;
 
 		this.controls = await createStickyWindowControls(leaf);
 		this.controls.applyPinned(this.pinned);
+		if (size) this.controls.applySize(size);
 
 		this.installChromeBar(leaf, this.file.basename);
 		this.installPopoutCloseListener(leaf);
@@ -76,7 +80,7 @@ export class StickyWindow {
 			try {
 				this.cleanups[i]();
 			} catch (e) {
-				console.warn("[today-sticky] cleanup failed", e);
+				console.warn("[mystickies] cleanup failed", e);
 			}
 		}
 		this.cleanups = [];
@@ -141,9 +145,12 @@ export class StickyWindow {
 		let raf: number | null = null;
 		let target = opacity.idle;
 		let value = opacity.idle;
-		const animateTo = (next: number) => {
+		const animateTo = (next: number, durationMs: number) => {
 			target = next;
-			if (raf !== null) return;
+			if (raf !== null) {
+				popoutWin.cancelAnimationFrame(raf);
+				raf = null;
+			}
 			const start = performance.now();
 			const from = value;
 			const tick = () => {
@@ -151,7 +158,7 @@ export class StickyWindow {
 					raf = null;
 					return;
 				}
-				const t = Math.min(1, (performance.now() - start) / opacity.fadeMs);
+				const t = Math.min(1, (performance.now() - start) / durationMs);
 				const eased = t * t * (3 - 2 * t);
 				value = from + (target - from) * eased;
 				controls.applyOpacity(value);
@@ -159,14 +166,13 @@ export class StickyWindow {
 					raf = popoutWin.requestAnimationFrame(tick);
 				} else {
 					raf = null;
-					if (target !== value) animateTo(target);
 				}
 			};
 			raf = popoutWin.requestAnimationFrame(tick);
 		};
 
-		const onEnter = () => animateTo(opacity.active);
-		const onLeave = () => animateTo(opacity.idle);
+		const onEnter = () => animateTo(opacity.active, opacity.fadeInMs);
+		const onLeave = () => animateTo(opacity.idle, opacity.fadeOutMs);
 		const root = popoutWin.document.documentElement;
 		root.addEventListener("mouseenter", onEnter);
 		root.addEventListener("mouseleave", onLeave);
@@ -197,14 +203,25 @@ export class StickyWindow {
 	private readOpacitySettings(leaf: WorkspaceLeaf): OpacitySettings | null {
 		const doc = getPopoutDocument(leaf);
 		const style = doc?.defaultView?.getComputedStyle(doc.body);
-		const idle = readCssNumber(style, "--today-sticky-idle-opacity");
-		const active = readCssNumber(style, "--today-sticky-active-opacity");
-		const fadeMs = readCssNumber(style, "--today-sticky-opacity-fade-ms");
-		if (idle === null || active === null || fadeMs === null || fadeMs <= 0) return null;
+		const idle = readCssNumber(style, "--mystickies-idle-opacity");
+		const active = readCssNumber(style, "--mystickies-active-opacity");
+		const fadeInMs = readCssNumber(style, "--mystickies-opacity-fade-in-ms");
+		const fadeOutMs = readCssNumber(style, "--mystickies-opacity-fade-out-ms");
+		if (
+			idle === null
+			|| active === null
+			|| fadeInMs === null
+			|| fadeOutMs === null
+			|| fadeInMs <= 0
+			|| fadeOutMs <= 0
+		) {
+			return null;
+		}
 		return {
 			idle,
 			active,
-			fadeMs,
+			fadeInMs,
+			fadeOutMs,
 		};
 	}
 
@@ -269,7 +286,7 @@ export class StickyWindow {
 		this.plugin.app.workspace.iterateRootLeaves((l) => mainLeaves.push(l));
 		const mainLeaf = mainLeaves[0];
 		if (!mainLeaf) {
-			new Notice("Today's Note Sticky: no main Obsidian leaf available.");
+			new Notice("MyStickies: no main Obsidian leaf available.");
 			return;
 		}
 		await mainLeaf.openFile(file);
@@ -284,7 +301,7 @@ export class StickyWindow {
 	private async openLinkInMain(linktext: string): Promise<void> {
 		const file = this.resolveLinkText(linktext);
 		if (!file) {
-			new Notice(`Today's Note Sticky: cannot resolve link "${linktext}"`);
+			new Notice(`MyStickies: cannot resolve link "${linktext}"`);
 			return;
 		}
 		await this.openFileInMain(file);
@@ -293,7 +310,7 @@ export class StickyWindow {
 	private async openLinkAsSticky(linktext: string): Promise<void> {
 		const file = this.resolveLinkText(linktext);
 		if (!file) {
-			new Notice(`Today's Note Sticky: cannot resolve link "${linktext}"`);
+			new Notice(`MyStickies: cannot resolve link "${linktext}"`);
 			return;
 		}
 		await this.manager.openFile(file);
@@ -312,14 +329,14 @@ export class StickyWindow {
 		this.cleanups.push(() => obs.disconnect());
 	}
 
-	/** Re-add `today-sticky-popout` to the popout body if Obsidian removes it
+	/** Re-add `mystickies-popout` to the popout body if Obsidian removes it
 	 *  during a layout transition (e.g. resize). */
 	private installBodyClassGuard(leaf: WorkspaceLeaf): void {
 		const doc = getPopoutDocument(leaf);
 		if (!doc) return;
 		const ensure = () => {
-			if (!doc.body.classList.contains("today-sticky-popout")) {
-				doc.body.classList.add("today-sticky-popout");
+			if (!doc.body.classList.contains("mystickies-popout")) {
+				doc.body.classList.add("mystickies-popout");
 			}
 		};
 		ensure();
@@ -328,32 +345,40 @@ export class StickyWindow {
 		this.cleanups.push(() => obs.disconnect());
 	}
 
-	/** Persist popout's last innerWidth/innerHeight (debounced) so the next
-	 *  new sticky opens at the same size. */
+	/** Track the popout's content size so the next new sticky opens the same way. */
 	private installResizeTracker(leaf: WorkspaceLeaf): void {
+		const controls = this.controls;
 		const popoutWin = getPopoutWindow(leaf);
-		if (!popoutWin) return;
-		let timer: number | null = null;
-		const handler = () => {
-			if (timer !== null) popoutWin.clearTimeout(timer);
-			timer = popoutWin.setTimeout(() => {
-				timer = null;
-				const w = popoutWin.innerWidth;
-				const h = popoutWin.innerHeight;
-				if (w > 0 && h > 0) void this.plugin.saveStickySize(w, h);
-			}, 500);
+		const doc = getPopoutDocument(leaf);
+		if (!controls && !popoutWin && !doc) return;
+
+		let lastSize = normalizeSize(controls?.readSize() ?? readDocumentSize(doc) ?? readWindowSize(popoutWin));
+		const capture = (size: StickyWindowSize | null = null) => {
+			const next = normalizeSize(size ?? controls?.readSize() ?? readDocumentSize(doc) ?? readWindowSize(popoutWin));
+			if (!next) return;
+			if (lastSize && isSameSize(lastSize, next)) return;
+			lastSize = next;
+			this.plugin.rememberStickySize(next.width, next.height);
 		};
-		popoutWin.addEventListener("resize", handler);
+
+		const uninstallNativeResize = controls?.onResize(capture) ?? (() => {});
+		const handler = () => {
+			capture();
+		};
+		popoutWin?.addEventListener("resize", handler);
+		const ResizeObserverCtor = doc?.defaultView?.ResizeObserver;
+		const observer = ResizeObserverCtor ? new ResizeObserverCtor(() => capture()) : null;
+		if (observer && doc) {
+			observer.observe(doc.documentElement);
+			observer.observe(doc.body);
+		}
 		this.cleanups.push(() => {
-			if (timer !== null) {
-				try {
-					popoutWin.clearTimeout(timer);
-				} catch {
-					/* */
-				}
-			}
+			capture();
+			this.plugin.flushStickySize();
+			uninstallNativeResize();
+			observer?.disconnect();
 			try {
-				popoutWin.removeEventListener("resize", handler);
+				popoutWin?.removeEventListener("resize", handler);
 			} catch {
 				/* */
 			}
@@ -374,4 +399,32 @@ function readCssNumber(style: CSSStyleDeclaration | undefined, name: string): nu
 	if (!raw) return null;
 	const value = Number.parseFloat(raw);
 	return Number.isFinite(value) ? value : null;
+}
+
+function readWindowSize(win: Window | null): StickyWindowSize | null {
+	if (!win) return null;
+	const { innerWidth: width, innerHeight: height } = win;
+	if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+	return { width, height };
+}
+
+function readDocumentSize(doc: Document | null): StickyWindowSize | null {
+	const win = doc?.defaultView;
+	if (!doc || !win) return null;
+	const width = doc.documentElement.clientWidth || win.innerWidth;
+	const height = doc.documentElement.clientHeight || win.innerHeight;
+	if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+	return { width, height };
+}
+
+function normalizeSize(size: StickyWindowSize | null | undefined): StickyWindowSize | null {
+	if (!size) return null;
+	const width = Math.round(size.width);
+	const height = Math.round(size.height);
+	if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+	return { width, height };
+}
+
+function isSameSize(a: StickyWindowSize, b: StickyWindowSize): boolean {
+	return a.width === b.width && a.height === b.height;
 }

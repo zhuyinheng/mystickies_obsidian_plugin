@@ -5,9 +5,21 @@ interface ElectronBrowserWindow {
 	setVisibleOnAllWorkspaces?: (flag: boolean, opts?: { visibleOnFullScreen?: boolean }) => void;
 	setWindowButtonVisibility?: (visible: boolean) => void;
 	setOpacity?: (value: number) => void;
+	setContentSize?: (width: number, height: number, animate?: boolean) => void;
+	getContentSize?: () => [number, number];
+	setSize?: (width: number, height: number, animate?: boolean) => void;
+	getSize?: () => [number, number];
+	on?: (event: "resize", listener: () => void) => void;
+	off?: (event: "resize", listener: () => void) => void;
+	removeListener?: (event: "resize", listener: () => void) => void;
 	close: () => void;
 	destroy?: () => void;
 	getTitle?: () => string;
+}
+
+export interface StickyWindowSize {
+	width: number;
+	height: number;
 }
 
 export interface StickyWindowControls {
@@ -15,6 +27,9 @@ export interface StickyWindowControls {
 	readonly supportsOpacity: boolean;
 	applyPinned(pinned: boolean): void;
 	applyOpacity(value: number): void;
+	applySize(size: StickyWindowSize): void;
+	readSize(): StickyWindowSize | null;
+	onResize(callback: (size: StickyWindowSize) => void): () => void;
 	closeWindow(): void;
 }
 
@@ -36,7 +51,7 @@ export async function createStickyWindowControls(leaf: WorkspaceLeaf): Promise<S
 	const popoutWin = getPopoutWindow(leaf);
 	const bw = await waitForBrowserWindow(leaf);
 	if (!bw) {
-		console.warn("[today-sticky] could not acquire popout BrowserWindow; native sticky controls are unavailable");
+		console.warn("[mystickies] could not acquire popout BrowserWindow; native sticky controls are unavailable");
 	}
 	configureNativeWindow(bw);
 	return makeControls(bw, popoutWin);
@@ -57,7 +72,7 @@ function makeControls(bw: ElectronBrowserWindow | null, popoutWin: Window | null
 			try {
 				bw?.setAlwaysOnTop(pinned, "floating");
 			} catch (e) {
-				console.warn("[today-sticky] setAlwaysOnTop failed", e);
+				console.warn("[mystickies] setAlwaysOnTop failed", e);
 			}
 		},
 		applyOpacity(value: number): void {
@@ -67,10 +82,61 @@ function makeControls(bw: ElectronBrowserWindow | null, popoutWin: Window | null
 				/* window may be torn down */
 			}
 		},
+		applySize(size: StickyWindowSize): void {
+			try {
+				const width = Math.round(size.width);
+				const height = Math.round(size.height);
+				if (bw?.setContentSize) {
+					bw.setContentSize(width, height);
+				} else {
+					bw?.setSize?.(width, height);
+				}
+			} catch (e) {
+				console.warn("[mystickies] setSize failed", e);
+			}
+		},
+		readSize(): StickyWindowSize | null {
+			return readBrowserWindowSize(bw);
+		},
+		onResize(callback: (size: StickyWindowSize) => void): () => void {
+			if (!bw?.on) return () => {};
+			const listener = () => {
+				const size = readBrowserWindowSize(bw);
+				if (size) callback(size);
+			};
+			try {
+				bw.on("resize", listener);
+			} catch {
+				return () => {};
+			}
+			return () => {
+				try {
+					if (bw.off) {
+						bw.off("resize", listener);
+					} else {
+						bw.removeListener?.("resize", listener);
+					}
+				} catch {
+					/* window may be torn down */
+				}
+			};
+		},
 		closeWindow(): void {
 			destroyPopout(bw, popoutWin);
 		},
 	};
+}
+
+function readBrowserWindowSize(bw: ElectronBrowserWindow | null): StickyWindowSize | null {
+	try {
+		const size = bw?.getContentSize?.() ?? bw?.getSize?.();
+		if (!size) return null;
+		const [width, height] = size;
+		if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+		return { width, height };
+	} catch {
+		return null;
+	}
 }
 
 function getBrowserWindowForLeaf(leaf: WorkspaceLeaf): ElectronBrowserWindow | null {
@@ -92,7 +158,7 @@ function getBrowserWindowForLeaf(leaf: WorkspaceLeaf): ElectronBrowserWindow | n
 		const all = mainRemote?.BrowserWindow?.getAllWindows?.() ?? [];
 		if (all.length === 0) return null;
 
-		const tag = `today-sticky-tag-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+		const tag = `mystickies-tag-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 		const titleEl = popoutWin.document.querySelector("title");
 		const original = titleEl?.textContent ?? "";
 		if (titleEl) titleEl.textContent = tag;
@@ -155,13 +221,13 @@ function configureNativeWindow(bw: ElectronBrowserWindow | null): void {
 	try {
 		bw.setVisibleOnAllWorkspaces?.(true, { visibleOnFullScreen: true });
 	} catch (e) {
-		console.warn("[today-sticky] setVisibleOnAllWorkspaces failed", e);
+		console.warn("[mystickies] setVisibleOnAllWorkspaces failed", e);
 	}
 	if (typeof process !== "undefined" && process.platform === "darwin") {
 		try {
 			bw.setWindowButtonVisibility?.(false);
 		} catch (e) {
-			console.warn("[today-sticky] setWindowButtonVisibility failed", e);
+			console.warn("[mystickies] setWindowButtonVisibility failed", e);
 		}
 	}
 }
