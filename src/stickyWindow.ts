@@ -11,6 +11,10 @@ import { PreviousOverlay } from "./previousOverlay";
 import { MidnightScheduler } from "./midnight";
 import { getDailyNoteSettings } from "obsidian-daily-notes-interface";
 
+const IDLE_OPACITY = 0.5;
+const ACTIVE_OPACITY = 1.0;
+const OPACITY_FADE_MS = 180;
+
 export class StickyWindow {
 	private leaf: WorkspaceLeaf | null = null;
 	private bw: ElectronBrowserWindow | null = null;
@@ -20,6 +24,8 @@ export class StickyWindow {
 	private pinned = true;
 	private vaultEvtUnregister: Array<() => void> = [];
 	private rerenderOverlay = debounce(() => void this.refreshOverlay(), 150, true);
+	private opacityCleanup: (() => void) | null = null;
+	private opacityRaf: number | null = null;
 
 	constructor(private plugin: TodayStickyPlugin) {}
 
@@ -77,6 +83,7 @@ export class StickyWindow {
 		this.installVaultListeners();
 		this.installPopoutCloseListener();
 		this.installMidnightScheduler();
+		this.installOpacityHover(leaf);
 	}
 
 	async rollover(): Promise<void> {
@@ -101,6 +108,12 @@ export class StickyWindow {
 	}
 
 	close(): void {
+		if (this.opacityRaf !== null) {
+			window.cancelAnimationFrame(this.opacityRaf);
+			this.opacityRaf = null;
+		}
+		this.opacityCleanup?.();
+		this.opacityCleanup = null;
 		this.midnight?.destroy();
 		this.midnight = null;
 		this.uninstallVaultListeners();
@@ -181,6 +194,69 @@ export class StickyWindow {
 		const popoutWin = this.leaf ? getPopoutWindow(this.leaf) : null;
 		if (popoutWin) this.midnight.attachFocusGuard(popoutWin);
 		this.midnight.attachFocusGuard(window);
+	}
+
+	private installOpacityHover(leaf: WorkspaceLeaf): void {
+		if (!this.bw?.setOpacity) return;
+		const popoutWin = getPopoutWindow(leaf);
+		if (!popoutWin) return;
+
+		this.bw.setOpacity(IDLE_OPACITY);
+
+		let currentTarget = IDLE_OPACITY;
+		let currentValue = IDLE_OPACITY;
+		const animateTo = (target: number) => {
+			currentTarget = target;
+			if (this.opacityRaf !== null) return; // already animating
+			const start = performance.now();
+			const from = currentValue;
+			const tick = () => {
+				if (!this.bw?.setOpacity) {
+					this.opacityRaf = null;
+					return;
+				}
+				const elapsed = performance.now() - start;
+				const t = Math.min(1, elapsed / OPACITY_FADE_MS);
+				const eased = t * t * (3 - 2 * t); // smoothstep
+				const value = from + (currentTarget - from) * eased;
+				currentValue = value;
+				try {
+					this.bw.setOpacity(value);
+				} catch {
+					/* swallow late calls after window closed */
+				}
+				if (t < 1) {
+					this.opacityRaf = popoutWin.requestAnimationFrame(tick);
+				} else {
+					this.opacityRaf = null;
+					if (currentTarget !== currentValue) animateTo(currentTarget);
+				}
+			};
+			this.opacityRaf = popoutWin.requestAnimationFrame(tick);
+		};
+
+		const onEnter = () => animateTo(ACTIVE_OPACITY);
+		const onLeave = () => animateTo(IDLE_OPACITY);
+		const onFocus = () => animateTo(ACTIVE_OPACITY);
+		const onBlur = () => animateTo(IDLE_OPACITY);
+
+		const root = popoutWin.document.documentElement;
+		root.addEventListener("mouseenter", onEnter);
+		root.addEventListener("mouseleave", onLeave);
+		popoutWin.addEventListener("focus", onFocus);
+		popoutWin.addEventListener("blur", onBlur);
+
+		this.opacityCleanup = () => {
+			try {
+				root.removeEventListener("mouseenter", onEnter);
+				root.removeEventListener("mouseleave", onLeave);
+				popoutWin.removeEventListener("focus", onFocus);
+				popoutWin.removeEventListener("blur", onBlur);
+				this.bw?.setOpacity?.(1.0);
+			} catch {
+				/* window may already be torn down */
+			}
+		};
 	}
 
 	private isLeafAttached(leaf: WorkspaceLeaf): boolean {

@@ -47,6 +47,7 @@ export interface ElectronBrowserWindow {
 	setVibrancy?: (type: string | null) => void;
 	setWindowButtonVisibility?: (visible: boolean) => void;
 	setTitleBarOverlay?: (opts: { color?: string; symbolColor?: string; height?: number }) => void;
+	setOpacity?: (value: number) => void;
 	minimize: () => void;
 	close: () => void;
 	isAlwaysOnTop: () => boolean;
