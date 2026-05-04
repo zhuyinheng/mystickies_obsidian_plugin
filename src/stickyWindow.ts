@@ -73,6 +73,7 @@ export class StickyWindow {
 			{
 				onClose: () => this.close(),
 				onTogglePin: () => this.togglePin(),
+				onOpenInMain: () => void this.openCurrentInMain(),
 			},
 			this.pinned,
 		);
@@ -120,6 +121,11 @@ export class StickyWindow {
 			console.warn("[today-sticky] togglePin failed", e);
 		}
 		return this.pinned;
+	}
+
+	async openCurrentInMain(): Promise<void> {
+		if (!this.currentFile) return;
+		await this.openFileInMain(this.currentFile);
 	}
 
 	private installPopoutCloseListener(): void {
@@ -193,10 +199,11 @@ export class StickyWindow {
 	}
 
 	/**
-	 * Intercept clicks on internal links inside the popout. The sticky never
-	 * navigates to a new file in-place; instead:
-	 *   - plain click  → open in the main Obsidian window (focuses it)
-	 *   - cmd/ctrl+click → spawn a NEW sticky window for that link
+	 * Intercept clicks inside the popout that would otherwise navigate. Both
+	 * inline `[[wiki]]` links AND `![[embed]]` embed titles/icons are
+	 * redirected: plain click → main Obsidian window, cmd/ctrl click → new
+	 * sticky window. The sticky's own leaf never changes file as a side
+	 * effect of clicking.
 	 */
 	private installLinkInterceptor(leaf: WorkspaceLeaf): void {
 		const doc = getPopoutDocument(leaf);
@@ -206,26 +213,19 @@ export class StickyWindow {
 			const target = ev.target as HTMLElement | null;
 			if (!target) return;
 
-			const link = target.closest(
-				"a.internal-link, a[data-href], .cm-hmd-internal-link, .cm-link-alias, .cm-formatting-link, span.cm-underline",
-			) as HTMLElement | null;
-			if (!link) return;
+			const linktext = this.extractClickedLinktext(target);
+			if (!linktext) return;
 
-			const href = link.getAttribute("data-href")
-				|| link.getAttribute("href")
-				|| (link.textContent ?? "").trim();
-			if (!href) return;
-
-			if (/^[a-z][a-z0-9+.-]*:\/\//i.test(href) && !href.startsWith("obsidian://")) return;
+			if (/^[a-z][a-z0-9+.-]*:\/\//i.test(linktext) && !linktext.startsWith("obsidian://")) return;
 
 			ev.preventDefault();
 			ev.stopImmediatePropagation();
 
 			const newSticky = ev.metaKey || ev.ctrlKey;
 			if (newSticky) {
-				void this.openLinkAsSticky(href);
+				void this.openLinkAsSticky(linktext);
 			} else {
-				void this.openLinkInMain(href);
+				void this.openLinkInMain(linktext);
 			}
 		};
 
@@ -237,24 +237,53 @@ export class StickyWindow {
 		};
 	}
 
+	/**
+	 * Returns the link path string for a click target, or null if the click
+	 * isn't a navigation gesture. Handles two cases:
+	 *  1. Plain wiki/internal links — `<a class="internal-link" data-href=...>`
+	 *  2. Embed titles / link icons — climb to the wrapping
+	 *     `.markdown-embed` / `.internal-embed` and read its `src` attr.
+	 *     Clicks on the embed's content body don't count (so user can still
+	 *     interact with embedded checkboxes etc.).
+	 */
+	private extractClickedLinktext(target: HTMLElement): string | null {
+		const embedTrigger = target.closest(
+			".markdown-embed-title, .markdown-embed-link",
+		) as HTMLElement | null;
+		if (embedTrigger) {
+			const embedWrap = embedTrigger.closest(
+				".markdown-embed, .internal-embed",
+			) as HTMLElement | null;
+			const src = embedWrap?.getAttribute("src") ?? embedWrap?.getAttribute("alt");
+			if (src) return src;
+		}
+
+		const link = target.closest(
+			"a.internal-link, a[data-href], .cm-hmd-internal-link, .cm-link-alias, .cm-formatting-link, span.cm-underline",
+		) as HTMLElement | null;
+		if (link) {
+			return link.getAttribute("data-href")
+				|| link.getAttribute("href")
+				|| (link.textContent ?? "").trim()
+				|| null;
+		}
+
+		return null;
+	}
+
 	private resolveLinkText(linktext: string): TFile | null {
 		const sourcePath = this.currentFile?.path ?? "";
 		return this.plugin.app.metadataCache.getFirstLinkpathDest(linktext, sourcePath);
 	}
 
-	private async openLinkInMain(linktext: string): Promise<void> {
-		const file = this.resolveLinkText(linktext);
-		if (!file) {
-			new Notice(`Today's Note Sticky: cannot resolve link "${linktext}"`);
-			return;
-		}
+	private async openFileInMain(file: TFile): Promise<void> {
 		const mainLeaves: WorkspaceLeaf[] = [];
 		this.plugin.app.workspace.iterateRootLeaves((l) => {
 			mainLeaves.push(l);
 		});
 		const mainLeaf = mainLeaves[0];
 		if (!mainLeaf) {
-			new Notice("Today's Note Sticky: no main Obsidian leaf to open link in.");
+			new Notice("Today's Note Sticky: no main Obsidian leaf available.");
 			return;
 		}
 		await mainLeaf.openFile(file);
@@ -264,6 +293,15 @@ export class StickyWindow {
 		} catch {
 			/* */
 		}
+	}
+
+	private async openLinkInMain(linktext: string): Promise<void> {
+		const file = this.resolveLinkText(linktext);
+		if (!file) {
+			new Notice(`Today's Note Sticky: cannot resolve link "${linktext}"`);
+			return;
+		}
+		await this.openFileInMain(file);
 	}
 
 	private async openLinkAsSticky(linktext: string): Promise<void> {

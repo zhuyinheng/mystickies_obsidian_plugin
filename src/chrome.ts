@@ -4,6 +4,7 @@ import { getPopoutDocument } from "./electronWindow";
 export interface ChromeCallbacks {
 	onClose: () => void;
 	onTogglePin: () => boolean;
+	onOpenInMain: () => void;
 }
 
 export interface ChromeHandle {
@@ -41,10 +42,14 @@ export function installChrome(
 	});
 	updatePinBtn(pinBtn, initialPinned);
 
+	const openMainBtn = makeBtn(doc, "today-sticky-btn go-main", "↗", callbacks.onOpenInMain);
+	openMainBtn.title = "Open this note in the main Obsidian window";
+
 	const closeBtn = makeBtn(doc, "today-sticky-btn close", "×", callbacks.onClose);
-	closeBtn.title = "Close";
+	closeBtn.title = "Close sticky";
 
 	bar.appendChild(pinBtn);
+	bar.appendChild(openMainBtn);
 	bar.appendChild(closeBtn);
 
 	doc.body.prepend(bar);
