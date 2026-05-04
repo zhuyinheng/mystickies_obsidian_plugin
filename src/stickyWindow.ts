@@ -27,6 +27,7 @@ export class StickyWindow {
 	private linkInterceptCleanup: (() => void) | null = null;
 	private titleObserver: MutationObserver | null = null;
 	private bodyClassObserver: MutationObserver | null = null;
+	private resizeCleanup: (() => void) | null = null;
 
 	constructor(
 		private plugin: TodayStickyPlugin,
@@ -52,7 +53,7 @@ export class StickyWindow {
 		this.currentFile = file;
 
 		const leaf = this.plugin.app.workspace.openPopoutLeaf({
-			size: { width: 480, height: 720 },
+			size: this.plugin.getStickySize(),
 		});
 		await leaf.openFile(file, { active: true });
 		this.leaf = leaf;
@@ -80,6 +81,7 @@ export class StickyWindow {
 		this.installLinkInterceptor(leaf);
 		this.installTitleSuppressor(leaf);
 		this.installBodyClassGuard(leaf);
+		this.installResizeTracker(leaf);
 	}
 
 	focus(): void {
@@ -108,6 +110,8 @@ export class StickyWindow {
 		this.titleObserver = null;
 		this.bodyClassObserver?.disconnect();
 		this.bodyClassObserver = null;
+		this.resizeCleanup?.();
+		this.resizeCleanup = null;
 		this.chrome?.uninstall();
 		this.chrome = null;
 
@@ -369,6 +373,43 @@ export class StickyWindow {
 		const obs = new MutationObserver(ensure);
 		obs.observe(doc.body, { attributes: true, attributeFilter: ["class"] });
 		this.bodyClassObserver = obs;
+	}
+
+	/**
+	 * Listen for popout window resize and persist the latest size to plugin
+	 * settings. Debounced 500ms because resize fires every pixel during drag.
+	 * Only the size from the most recent resize wins; old open stickies are
+	 * not affected — only the NEXT new sticky reads this size.
+	 */
+	private installResizeTracker(leaf: WorkspaceLeaf): void {
+		const popoutWin = getPopoutWindow(leaf);
+		if (!popoutWin) return;
+		let timer: number | null = null;
+		const handler = () => {
+			if (timer !== null) popoutWin.clearTimeout(timer);
+			timer = popoutWin.setTimeout(() => {
+				timer = null;
+				const w = popoutWin.innerWidth;
+				const h = popoutWin.innerHeight;
+				if (w > 0 && h > 0) void this.plugin.saveStickySize(w, h);
+			}, 500);
+		};
+		popoutWin.addEventListener("resize", handler);
+		this.resizeCleanup = () => {
+			if (timer !== null) {
+				try {
+					popoutWin.clearTimeout(timer);
+				} catch {
+					/* */
+				}
+				timer = null;
+			}
+			try {
+				popoutWin.removeEventListener("resize", handler);
+			} catch {
+				/* */
+			}
+		};
 	}
 
 	private isLeafAttached(leaf: WorkspaceLeaf): boolean {

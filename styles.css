@@ -185,9 +185,9 @@ body.today-sticky-popout .markdown-embed {
 	max-height: 48px;
 	overflow: hidden;
 	opacity: 0.5;
-	/* Embed body text smaller than the host note's normal size; cascades
-	 * to all descendants unless overridden below. */
-	font-size: 0.7em;
+	/* Embed body text materially smaller than the host note's normal size.
+	 * Cascades to all descendants; embedded headings clamped further below. */
+	font-size: 0.55em;
 	background: var(--background-modifier-cover, rgba(255, 255, 255, 0.025));
 	border: none !important;
 	border-radius: 4px;

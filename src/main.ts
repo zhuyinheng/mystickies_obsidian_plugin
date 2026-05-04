@@ -4,11 +4,26 @@ import { StickyManager } from "./stickyManager";
 import { FileTarget } from "./stickyTarget";
 import { getBrowserWindowForLeaf } from "./electronWindow";
 
+interface StickySettings {
+	/** Last-used inner width of a sticky popout. Applied to the next open. */
+	width: number;
+	/** Last-used inner height of a sticky popout. */
+	height: number;
+}
+
+const DEFAULT_SETTINGS: StickySettings = {
+	width: 480,
+	height: 240,
+};
+
 export default class TodayStickyPlugin extends Plugin {
 	dailyNotes!: DailyNotes;
 	stickies!: StickyManager;
+	settings!: StickySettings;
 
 	async onload() {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+
 		this.dailyNotes = new DailyNotes(this.app);
 		this.stickies = new StickyManager(this);
 
@@ -68,6 +83,22 @@ export default class TodayStickyPlugin extends Plugin {
 
 	onunload() {
 		this.stickies?.closeAll();
+	}
+
+	/**
+	 * Save the size the user just resized a popout to. Applies to the NEXT
+	 * sticky open; never resizes already-open stickies. Single global value
+	 * (not per-file) — the sticky size is a UX preference, not a property of
+	 * individual notes. Debouncing happens at the caller in stickyWindow.
+	 */
+	async saveStickySize(width: number, height: number): Promise<void> {
+		this.settings.width = width;
+		this.settings.height = height;
+		await this.saveData(this.settings);
+	}
+
+	getStickySize(): { width: number; height: number } {
+		return { width: this.settings.width, height: this.settings.height };
 	}
 
 	private activeMainFile(): TFile | null {
