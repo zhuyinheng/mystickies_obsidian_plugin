@@ -1,11 +1,14 @@
-import { App, TFile } from "obsidian";
-import moment, { Moment } from "moment";
+import { App, TFile, moment as obsMoment } from "obsidian";
+import type { Moment } from "moment";
 import {
 	appHasDailyNotesPluginLoaded,
 	createDailyNote,
 	getAllDailyNotes,
 	getDailyNote,
 } from "obsidian-daily-notes-interface";
+
+type MomentFn = (input?: string | number | Date | Moment) => Moment;
+const moment: MomentFn = obsMoment as unknown as MomentFn;
 
 export class DailyNotes {
 	constructor(private app: App) {}
