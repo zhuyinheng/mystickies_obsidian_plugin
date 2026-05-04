@@ -1,7 +1,15 @@
-import { MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
+import { MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf, moment as obsMoment } from "obsidian";
+import type { Moment } from "moment";
+import {
+	appHasDailyNotesPluginLoaded,
+	createDailyNote,
+	getAllDailyNotes,
+	getDailyNote,
+} from "obsidian-daily-notes-interface";
 import { StickyManager } from "./stickyManager";
-import { FileTarget } from "./stickyTarget";
-import { getBrowserWindowForLeaf } from "./electronWindow";
+import { closePopoutLeaf, getPopoutWindow } from "./windowControls";
+
+const moment = obsMoment as unknown as () => Moment;
 
 interface StickySettings {
 	/** Last-used inner width of a sticky popout. Applied to the next open. */
@@ -28,7 +36,7 @@ export default class TodayStickyPlugin extends Plugin {
 			id: "open-today-sticky",
 			name: "Open today's sticky window",
 			callback: () => {
-				void this.stickies.openToday();
+				void this.openTodaySticky();
 			},
 		});
 
@@ -54,7 +62,7 @@ export default class TodayStickyPlugin extends Plugin {
 		});
 
 		this.addRibbonIcon("sticky-note", "Open today's sticky", () => {
-			void this.stickies.openToday();
+			void this.openTodaySticky();
 		});
 
 		this.registerEvent(
@@ -64,7 +72,7 @@ export default class TodayStickyPlugin extends Plugin {
 					item.setTitle("Open as sticky")
 						.setIcon("sticky-note")
 						.onClick(() => {
-							void this.stickies.openTarget(new FileTarget(file.path));
+							void this.stickies.openFile(file);
 						});
 				});
 			}),
@@ -73,7 +81,7 @@ export default class TodayStickyPlugin extends Plugin {
 		this.app.workspace.onLayoutReady(() => {
 			void (async () => {
 				this.killOrphanPopouts();
-				await this.stickies.openToday();
+				await this.openTodaySticky();
 			})();
 		});
 	}
@@ -96,6 +104,22 @@ export default class TodayStickyPlugin extends Plugin {
 
 	getStickySize(): { width: number; height: number } {
 		return { width: this.settings.width, height: this.settings.height };
+	}
+
+	private async openTodaySticky(): Promise<void> {
+		const file = await this.resolveTodayFile();
+		if (!file) {
+			new Notice("Today's Note Sticky: failed to open today's note.");
+			return;
+		}
+		await this.stickies.openFile(file);
+	}
+
+	private async resolveTodayFile(): Promise<TFile | null> {
+		if (!appHasDailyNotesPluginLoaded()) return null;
+		const today = moment();
+		const all = getAllDailyNotes();
+		return getDailyNote(today, all) ?? (await createDailyNote(today));
 	}
 
 	private activeMainFile(): TFile | null {
@@ -128,18 +152,10 @@ export default class TodayStickyPlugin extends Plugin {
 	private killOrphanPopouts(): void {
 		const ghosts: WorkspaceLeaf[] = [];
 		this.app.workspace.iterateAllLeaves((leaf) => {
-			const container = (leaf as unknown as { getContainer?: () => { win?: Window } }).getContainer?.();
-			const popoutWin = container?.win;
-			if (popoutWin && popoutWin !== window) ghosts.push(leaf);
+			if (getPopoutWindow(leaf)) ghosts.push(leaf);
 		});
 		for (const leaf of ghosts) {
-			const bw = getBrowserWindowForLeaf(leaf);
-			leaf.detach();
-			try {
-				bw?.close();
-			} catch {
-				/* already gone */
-			}
+			closePopoutLeaf(leaf);
 		}
 	}
 }

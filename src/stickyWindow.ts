@@ -1,24 +1,23 @@
 import { Notice, TFile, WorkspaceLeaf } from "obsidian";
 import type TodayStickyPlugin from "./main";
 import {
-	configureStickyWindow,
-	getBrowserWindowForLeaf,
+	createStickyWindowControls,
 	getPopoutDocument,
 	getPopoutWindow,
-	type ElectronBrowserWindow,
-} from "./electronWindow";
+	type StickyWindowControls,
+} from "./windowControls";
 import { installChrome } from "./chrome";
-import { FileTarget, type StickyTarget } from "./stickyTarget";
 import type { StickyManager } from "./stickyManager";
 
-const IDLE_OPACITY = 0.5;
-const ACTIVE_OPACITY = 1.0;
-const OPACITY_FADE_MS = 180;
+interface OpacitySettings {
+	idle: number;
+	active: number;
+	fadeMs: number;
+}
 
 export class StickyWindow {
 	private leaf: WorkspaceLeaf | null = null;
-	private bw: ElectronBrowserWindow | null = null;
-	private currentFile: TFile | null = null;
+	private controls: StickyWindowControls | null = null;
 	private pinned = true;
 	private closing = false;
 	/** Cleanups registered by install* methods. Drained LIFO in close(). */
@@ -26,7 +25,7 @@ export class StickyWindow {
 
 	constructor(
 		private plugin: TodayStickyPlugin,
-		public readonly target: StickyTarget,
+		public readonly file: TFile,
 		private manager: StickyManager,
 	) {}
 
@@ -40,26 +39,16 @@ export class StickyWindow {
 			return;
 		}
 
-		const file = await this.target.resolve(this.plugin.app);
-		if (!file) {
-			new Notice("Today's Note Sticky: failed to resolve target file.");
-			return;
-		}
-		this.currentFile = file;
-
 		const leaf = this.plugin.app.workspace.openPopoutLeaf({
 			size: this.plugin.getStickySize(),
 		});
-		await leaf.openFile(file, { active: true });
+		await leaf.openFile(this.file, { active: true });
 		this.leaf = leaf;
 
-		// Allow popout DOM to settle before applying chrome.
-		await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+		this.controls = await createStickyWindowControls(leaf);
+		this.controls.applyPinned(this.pinned);
 
-		this.bw = getBrowserWindowForLeaf(leaf);
-		configureStickyWindow(this.bw);
-
-		this.installChromeBar(leaf, file.basename);
+		this.installChromeBar(leaf, this.file.basename);
 		this.installPopoutCloseListener(leaf);
 		this.installOpacityHover(leaf);
 		this.installLinkInterceptor(leaf);
@@ -74,9 +63,9 @@ export class StickyWindow {
 	}
 
 	/**
-	 * Tear down the sticky and force-close its BrowserWindow. Re-entrant safe:
-	 * bw.close() fires the popout's beforeunload, which triggers close() again
-	 * via installPopoutCloseListener — the `closing` flag short-circuits.
+	 * Tear down the sticky and force-close its native window. Re-entrant safe:
+	 * native close fires the popout's beforeunload, which triggers close()
+	 * again via installPopoutCloseListener — the `closing` flag short-circuits.
 	 */
 	close(): void {
 		if (this.closing) return;
@@ -92,39 +81,27 @@ export class StickyWindow {
 		}
 		this.cleanups = [];
 
-		// Detach the leaf, then force-close the BrowserWindow. Obsidian 1.12's
-		// leaf.detach() does not tear down the popout — without bw.close()
-		// it lingers chrome-less and uncloseable.
-		const bw = this.bw;
-		this.bw = null;
+		// Detach the leaf, then force-close the popout. Obsidian 1.12's
+		// leaf.detach() does not tear down the popout — without a window-level
+		// close it lingers chrome-less and uncloseable.
+		const controls = this.controls;
+		this.controls = null;
 		this.leaf?.detach();
 		this.leaf = null;
-		if (bw) {
-			try {
-				bw.close();
-			} catch {
-				/* already closed */
-			}
-		}
+		controls?.closeWindow();
 
-		this.currentFile = null;
-		this.manager.unregister(this.target);
+		this.manager.unregister(this.file);
 	}
 
 	togglePin(): boolean {
-		if (!this.bw) return this.pinned;
+		if (!this.controls?.hasNativeWindow) return this.pinned;
 		this.pinned = !this.pinned;
-		try {
-			this.bw.setAlwaysOnTop(this.pinned, "floating");
-		} catch (e) {
-			console.warn("[today-sticky] togglePin failed", e);
-		}
+		this.controls.applyPinned(this.pinned);
 		return this.pinned;
 	}
 
 	async openCurrentInMain(): Promise<void> {
-		if (!this.currentFile) return;
-		await this.openFileInMain(this.currentFile);
+		await this.openFileInMain(this.file);
 	}
 
 	// ------------- install methods (each pushes a cleanup) ----------------
@@ -152,33 +129,32 @@ export class StickyWindow {
 	}
 
 	private installOpacityHover(leaf: WorkspaceLeaf): void {
-		if (!this.bw?.setOpacity) return;
+		const controls = this.controls;
+		if (!controls?.supportsOpacity) return;
 		const popoutWin = getPopoutWindow(leaf);
 		if (!popoutWin) return;
 
-		this.bw.setOpacity(IDLE_OPACITY);
+		const opacity = this.readOpacitySettings(leaf);
+		if (!opacity) return;
+		controls.applyOpacity(opacity.idle);
 
 		let raf: number | null = null;
-		let target = IDLE_OPACITY;
-		let value = IDLE_OPACITY;
+		let target = opacity.idle;
+		let value = opacity.idle;
 		const animateTo = (next: number) => {
 			target = next;
 			if (raf !== null) return;
 			const start = performance.now();
 			const from = value;
 			const tick = () => {
-				if (!this.bw?.setOpacity) {
+				if (!this.controls) {
 					raf = null;
 					return;
 				}
-				const t = Math.min(1, (performance.now() - start) / OPACITY_FADE_MS);
+				const t = Math.min(1, (performance.now() - start) / opacity.fadeMs);
 				const eased = t * t * (3 - 2 * t);
 				value = from + (target - from) * eased;
-				try {
-					this.bw.setOpacity(value);
-				} catch {
-					/* */
-				}
+				controls.applyOpacity(value);
 				if (t < 1) {
 					raf = popoutWin.requestAnimationFrame(tick);
 				} else {
@@ -189,8 +165,8 @@ export class StickyWindow {
 			raf = popoutWin.requestAnimationFrame(tick);
 		};
 
-		const onEnter = () => animateTo(ACTIVE_OPACITY);
-		const onLeave = () => animateTo(IDLE_OPACITY);
+		const onEnter = () => animateTo(opacity.active);
+		const onLeave = () => animateTo(opacity.idle);
 		const root = popoutWin.document.documentElement;
 		root.addEventListener("mouseenter", onEnter);
 		root.addEventListener("mouseleave", onLeave);
@@ -211,11 +187,25 @@ export class StickyWindow {
 				root.removeEventListener("mouseleave", onLeave);
 				popoutWin.removeEventListener("focus", onEnter);
 				popoutWin.removeEventListener("blur", onLeave);
-				this.bw?.setOpacity?.(1.0);
+				controls.applyOpacity(opacity.active);
 			} catch {
 				/* window may be torn down */
 			}
 		});
+	}
+
+	private readOpacitySettings(leaf: WorkspaceLeaf): OpacitySettings | null {
+		const doc = getPopoutDocument(leaf);
+		const style = doc?.defaultView?.getComputedStyle(doc.body);
+		const idle = readCssNumber(style, "--today-sticky-idle-opacity");
+		const active = readCssNumber(style, "--today-sticky-active-opacity");
+		const fadeMs = readCssNumber(style, "--today-sticky-opacity-fade-ms");
+		if (idle === null || active === null || fadeMs === null || fadeMs <= 0) return null;
+		return {
+			idle,
+			active,
+			fadeMs,
+		};
 	}
 
 	/**
@@ -271,8 +261,7 @@ export class StickyWindow {
 	}
 
 	private resolveLinkText(linktext: string): TFile | null {
-		const sourcePath = this.currentFile?.path ?? "";
-		return this.plugin.app.metadataCache.getFirstLinkpathDest(linktext, sourcePath);
+		return this.plugin.app.metadataCache.getFirstLinkpathDest(linktext, this.file.path);
 	}
 
 	private async openFileInMain(file: TFile): Promise<void> {
@@ -307,7 +296,7 @@ export class StickyWindow {
 			new Notice(`Today's Note Sticky: cannot resolve link "${linktext}"`);
 			return;
 		}
-		await this.manager.openTarget(new FileTarget(file.path));
+		await this.manager.openFile(file);
 	}
 
 	/** Suppress the OS title bar text — Obsidian rewrites it on every file change. */
@@ -378,4 +367,11 @@ export class StickyWindow {
 		});
 		return found;
 	}
+}
+
+function readCssNumber(style: CSSStyleDeclaration | undefined, name: string): number | null {
+	const raw = style?.getPropertyValue(name).trim();
+	if (!raw) return null;
+	const value = Number.parseFloat(raw);
+	return Number.isFinite(value) ? value : null;
 }

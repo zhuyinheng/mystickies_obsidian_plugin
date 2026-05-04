@@ -41,6 +41,9 @@ body.today-sticky-popout .titlebar {
  * level setOpacity still makes the whole popout fade to translucent in
  * idle so other apps show through. */
 body.today-sticky-popout {
+	--today-sticky-idle-opacity: 0.5;
+	--today-sticky-active-opacity: 1;
+	--today-sticky-opacity-fade-ms: 10000ms;
 	background: var(--background-primary) !important;
 	border-radius: 12px;
 	overflow: hidden;
@@ -151,6 +154,22 @@ body.today-sticky-popout .app-container {
 	opacity: 1;
 	background: var(--background-modifier-hover, rgba(255, 255, 255, 0.12));
 	color: var(--text-normal);
+}
+.today-sticky-btn::before {
+	display: block;
+	line-height: 14px;
+}
+.today-sticky-btn.pin::before {
+	content: "○";
+}
+.today-sticky-btn.pin.is-pinned::before {
+	content: "●";
+}
+.today-sticky-btn.go-main::before {
+	content: "↗";
+}
+.today-sticky-btn.close::before {
+	content: "×";
 }
 .today-sticky-btn.close:hover {
 	background: var(--background-modifier-error, rgba(220, 38, 38, 0.65));

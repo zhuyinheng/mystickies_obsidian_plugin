@@ -1,5 +1,5 @@
 import type { WorkspaceLeaf } from "obsidian";
-import { getPopoutDocument } from "./electronWindow";
+import { getPopoutDocument } from "./windowControls";
 
 export interface ChromeCallbacks {
 	onClose: () => void;
@@ -35,16 +35,14 @@ export function installChrome(
 
 	bar.appendChild(drag);
 
-	const pinBtn = makeBtn(doc, "today-sticky-btn pin", "●", () => {
+	const pinBtn = makeBtn(doc, "today-sticky-btn pin", "Pinned (always on top)", () => {
 		updatePinBtn(pinBtn, callbacks.onTogglePin());
 	});
 	updatePinBtn(pinBtn, initialPinned);
 
-	const openMainBtn = makeBtn(doc, "today-sticky-btn go-main", "↗", callbacks.onOpenInMain);
-	openMainBtn.title = "Open this note in the main Obsidian window";
+	const openMainBtn = makeBtn(doc, "today-sticky-btn go-main", "Open this note in the main Obsidian window", callbacks.onOpenInMain);
 
-	const closeBtn = makeBtn(doc, "today-sticky-btn close", "×", callbacks.onClose);
-	closeBtn.title = "Close sticky";
+	const closeBtn = makeBtn(doc, "today-sticky-btn close", "Close sticky", callbacks.onClose);
 
 	bar.appendChild(pinBtn);
 	bar.appendChild(openMainBtn);
@@ -57,10 +55,12 @@ export function installChrome(
 	};
 }
 
-function makeBtn(doc: Document, cls: string, text: string, onClick: () => void): HTMLButtonElement {
+function makeBtn(doc: Document, cls: string, label: string, onClick: () => void): HTMLButtonElement {
 	const b = doc.createElement("button");
 	b.className = cls;
-	b.textContent = text;
+	b.type = "button";
+	b.title = label;
+	b.setAttribute("aria-label", label);
 	b.addEventListener("click", (ev) => {
 		ev.preventDefault();
 		ev.stopPropagation();
@@ -70,6 +70,7 @@ function makeBtn(doc: Document, cls: string, text: string, onClick: () => void):
 }
 
 function updatePinBtn(btn: HTMLButtonElement, pinned: boolean): void {
-	btn.textContent = pinned ? "●" : "○";
+	btn.classList.toggle("is-pinned", pinned);
 	btn.title = pinned ? "Pinned (always on top) — click to unpin" : "Click to pin on top";
+	btn.setAttribute("aria-label", btn.title);
 }
