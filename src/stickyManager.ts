@@ -16,16 +16,30 @@ export class StickyManager {
 		await this.openTarget(new FileTarget(file.path));
 	}
 
+	/**
+	 * Open a sticky for `target`, deduplicated by target.key. If a sticky for
+	 * the key already exists in the map (whether already opened OR still
+	 * mid-open from a concurrent call), do NOT create another one — focus the
+	 * existing if it's already attached. The map insert happens BEFORE the
+	 * async open() so a second concurrent call sees it; this is what prevents
+	 * the "two popouts, one orphan" race.
+	 */
 	async openTarget(target: StickyTarget): Promise<void> {
 		const existing = this.sticks.get(target.key);
-		if (existing && existing.isOpen()) {
-			existing.focus();
+		if (existing) {
+			if (existing.isOpen()) existing.focus();
 			return;
 		}
-		if (existing) this.sticks.delete(target.key);
 		const sw = new StickyWindow(this.plugin, target, this);
 		this.sticks.set(target.key, sw);
-		await sw.open();
+		try {
+			await sw.open();
+		} catch (e) {
+			// open() failed before reaching the point where it owns the popout
+			// — drop the entry so a future call can retry.
+			this.sticks.delete(target.key);
+			throw e;
+		}
 	}
 
 	unregister(target: StickyTarget): void {

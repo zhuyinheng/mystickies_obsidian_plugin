@@ -34,48 +34,36 @@ export function getBrowserWindowForLeaf(leaf: WorkspaceLeaf): ElectronBrowserWin
 	return null;
 }
 
-export interface StickyConfig {
-	alwaysOnTop: boolean;
-	visibleOnAllWorkspaces: boolean;
-	hideTrafficLights: boolean;
-}
-
 export interface ElectronBrowserWindow {
 	setAlwaysOnTop: (flag: boolean, level?: string) => void;
 	setVisibleOnAllWorkspaces?: (flag: boolean, opts?: { visibleOnFullScreen?: boolean }) => void;
-	setVibrancy?: (type: string | null) => void;
 	setWindowButtonVisibility?: (visible: boolean) => void;
-	setTitleBarOverlay?: (opts: { color?: string; symbolColor?: string; height?: number }) => void;
 	setOpacity?: (value: number) => void;
-	minimize: () => void;
 	close: () => void;
-	isAlwaysOnTop: () => boolean;
-	getBounds: () => { x: number; y: number; width: number; height: number };
-	setBounds: (b: { x?: number; y?: number; width?: number; height?: number }) => void;
-	on: (event: string, listener: (...args: unknown[]) => void) => void;
-	off?: (event: string, listener: (...args: unknown[]) => void) => void;
 }
 
-export function configureStickyWindow(bw: ElectronBrowserWindow | null, config: StickyConfig): void {
+/**
+ * Apply the always-on-top sticky configuration to a popout's BrowserWindow.
+ * Always: alwaysOnTop("floating") + visibleOnAllWorkspaces (full-screen too)
+ * macOS: also hide native traffic lights so chrome reads as a clean tile.
+ */
+export function configureStickyWindow(bw: ElectronBrowserWindow | null): void {
 	if (!bw) return;
 	try {
-		if (config.alwaysOnTop) bw.setAlwaysOnTop(true, "floating");
+		bw.setAlwaysOnTop(true, "floating");
 	} catch (e) {
 		console.warn("[today-sticky] setAlwaysOnTop failed", e);
 	}
 	try {
-		if (config.visibleOnAllWorkspaces) {
-			bw.setVisibleOnAllWorkspaces?.(true, { visibleOnFullScreen: true });
-		}
+		bw.setVisibleOnAllWorkspaces?.(true, { visibleOnFullScreen: true });
 	} catch (e) {
 		console.warn("[today-sticky] setVisibleOnAllWorkspaces failed", e);
 	}
-	const platform = typeof process !== "undefined" ? process.platform : "";
-	try {
-		if (config.hideTrafficLights && platform === "darwin") {
+	if (typeof process !== "undefined" && process.platform === "darwin") {
+		try {
 			bw.setWindowButtonVisibility?.(false);
+		} catch (e) {
+			console.warn("[today-sticky] setWindowButtonVisibility failed", e);
 		}
-	} catch (e) {
-		console.warn("[today-sticky] setWindowButtonVisibility failed", e);
 	}
 }

@@ -9,8 +9,6 @@ export interface ChromeCallbacks {
 
 export interface ChromeHandle {
 	uninstall: () => void;
-	setPinned: (pinned: boolean) => void;
-	setTitle: (text: string) => void;
 }
 
 export function installChrome(
@@ -21,11 +19,7 @@ export function installChrome(
 ): ChromeHandle {
 	const doc = getPopoutDocument(leaf);
 	if (!doc) {
-		return {
-			uninstall: () => {},
-			setPinned: () => {},
-			setTitle: () => {},
-		};
+		return { uninstall: () => {} };
 	}
 
 	doc.body.classList.add("today-sticky-popout");
@@ -33,8 +27,6 @@ export function installChrome(
 	const bar = doc.createElement("div");
 	bar.className = "today-sticky-topbar";
 
-	// Drag region also serves as the title carrier. Title text is centred-
-	// left in the bar; the rest of the drag region is empty padding.
 	const drag = doc.createElement("div");
 	drag.className = "today-sticky-drag";
 
@@ -67,10 +59,6 @@ export function installChrome(
 		uninstall: () => {
 			bar.remove();
 			doc.body.classList.remove("today-sticky-popout");
-		},
-		setPinned: (pinned) => updatePinBtn(pinBtn, pinned),
-		setTitle: (text) => {
-			titleEl.textContent = text;
 		},
 	};
 }

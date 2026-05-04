@@ -1,7 +1,8 @@
-import { MarkdownView, Notice, Plugin, TFile } from "obsidian";
+import { MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { DailyNotes } from "./dailyNotes";
 import { StickyManager } from "./stickyManager";
 import { FileTarget } from "./stickyTarget";
+import { getBrowserWindowForLeaf } from "./electronWindow";
 
 export default class TodayStickyPlugin extends Plugin {
 	dailyNotes!: DailyNotes;
@@ -58,7 +59,10 @@ export default class TodayStickyPlugin extends Plugin {
 		);
 
 		this.app.workspace.onLayoutReady(() => {
-			void this.stickies.openToday();
+			void (async () => {
+				this.killOrphanPopouts();
+				await this.stickies.openToday();
+			})();
 		});
 	}
 
@@ -78,5 +82,36 @@ export default class TodayStickyPlugin extends Plugin {
 			if (leaf === view.leaf) isRootLeaf = true;
 		});
 		return isRootLeaf ? file : null;
+	}
+
+	/**
+	 * Kill popout leaves that survive across Obsidian sessions. Obsidian
+	 * persists popout windows in workspace state and restores them at
+	 * startup BEFORE our plugin code runs — they come back chrome-less
+	 * (no body class, no buttons) and, with traffic lights hidden by us
+	 * on subsequent runs, the user has no way to close them.
+	 *
+	 * This runs once at onLayoutReady, before our manager opens its first
+	 * sticky. The manager's map is empty at this point, so any popout we
+	 * find is necessarily a session-restored ghost rather than one we
+	 * own. Detach the leaf and force-close its BrowserWindow so a fresh,
+	 * managed sticky can take over.
+	 */
+	private killOrphanPopouts(): void {
+		const ghosts: WorkspaceLeaf[] = [];
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			const container = (leaf as unknown as { getContainer?: () => { win?: Window } }).getContainer?.();
+			const popoutWin = container?.win;
+			if (popoutWin && popoutWin !== window) ghosts.push(leaf);
+		});
+		for (const leaf of ghosts) {
+			const bw = getBrowserWindowForLeaf(leaf);
+			leaf.detach();
+			try {
+				bw?.close();
+			} catch {
+				/* already gone */
+			}
+		}
 	}
 }

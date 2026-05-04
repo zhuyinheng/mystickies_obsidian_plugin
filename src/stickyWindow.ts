@@ -21,6 +21,7 @@ export class StickyWindow {
 	private chrome: ChromeHandle | null = null;
 	private currentFile: TFile | null = null;
 	private pinned = true;
+	private closing = false;
 	private opacityCleanup: (() => void) | null = null;
 	private opacityRaf: number | null = null;
 	private linkInterceptCleanup: (() => void) | null = null;
@@ -61,11 +62,7 @@ export class StickyWindow {
 
 		this.bw = getBrowserWindowForLeaf(leaf);
 		this.pinned = true;
-		configureStickyWindow(this.bw, {
-			alwaysOnTop: true,
-			visibleOnAllWorkspaces: true,
-			hideTrafficLights: true,
-		});
+		configureStickyWindow(this.bw);
 
 		this.chrome = installChrome(
 			leaf,
@@ -90,7 +87,15 @@ export class StickyWindow {
 		this.plugin.app.workspace.setActiveLeaf(this.leaf, { focus: true });
 	}
 
+	/**
+	 * Tear down the sticky and force-close its BrowserWindow. Re-entrant safe:
+	 * bw.close() fires the popout's beforeunload, which calls close() again
+	 * via installPopoutCloseListener — the `closing` flag short-circuits.
+	 */
 	close(): void {
+		if (this.closing) return;
+		this.closing = true;
+
 		if (this.opacityRaf !== null) {
 			window.cancelAnimationFrame(this.opacityRaf);
 			this.opacityRaf = null;
@@ -105,9 +110,23 @@ export class StickyWindow {
 		this.bodyClassObserver = null;
 		this.chrome?.uninstall();
 		this.chrome = null;
+
+		// Capture bw before nulling so we can still close the BrowserWindow.
+		// Obsidian 1.12's leaf.detach() does NOT tear down the surrounding
+		// popout BrowserWindow, and with native traffic lights hidden the
+		// user has no other way to close it — so close it explicitly.
+		const bw = this.bw;
+		this.bw = null;
 		this.leaf?.detach();
 		this.leaf = null;
-		this.bw = null;
+		if (bw) {
+			try {
+				bw.close();
+			} catch {
+				/* already closed */
+			}
+		}
+
 		this.currentFile = null;
 		this.manager.unregister(this.target);
 	}
@@ -239,12 +258,11 @@ export class StickyWindow {
 
 	/**
 	 * Returns the link path string for a click target, or null if the click
-	 * isn't a navigation gesture. Handles two cases:
-	 *  1. Plain wiki/internal links — `<a class="internal-link" data-href=...>`
-	 *  2. Embed titles / link icons — climb to the wrapping
-	 *     `.markdown-embed` / `.internal-embed` and read its `src` attr.
-	 *     Clicks on the embed's content body don't count (so user can still
-	 *     interact with embedded checkboxes etc.).
+	 * isn't a navigation gesture.
+	 *  - Embed title / link icon → climb to the wrapping `.markdown-embed`
+	 *    or `.internal-embed` and read its `src` attr.
+	 *  - Plain wiki/internal link → read `data-href` (reading mode) or hit
+	 *    the `.cm-hmd-internal-link` source-mode marker.
 	 */
 	private extractClickedLinktext(target: HTMLElement): string | null {
 		const embedTrigger = target.closest(
@@ -259,7 +277,7 @@ export class StickyWindow {
 		}
 
 		const link = target.closest(
-			"a.internal-link, a[data-href], .cm-hmd-internal-link, .cm-link-alias, .cm-formatting-link, span.cm-underline",
+			"a.internal-link, a[data-href], .cm-hmd-internal-link",
 		) as HTMLElement | null;
 		if (link) {
 			return link.getAttribute("data-href")
