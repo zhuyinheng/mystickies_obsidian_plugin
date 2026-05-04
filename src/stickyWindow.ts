@@ -17,7 +17,7 @@ import type { StickyManager } from "./stickyManager";
 const IDLE_OPACITY = 0.5;
 const ACTIVE_OPACITY = 1.0;
 const OPACITY_FADE_MS = 180;
-const COLLAPSED_HEIGHT = 32;
+const COLLAPSED_HEIGHT = 60;
 
 export class StickyWindow {
 	private leaf: WorkspaceLeaf | null = null;
@@ -90,7 +90,6 @@ export class StickyWindow {
 				onTogglePin: () => this.togglePin(),
 			},
 			this.pinned,
-			file.basename,
 		);
 
 		if (this.target.trackDate) {
@@ -116,7 +115,6 @@ export class StickyWindow {
 		if (!newFile) return;
 		this.currentFile = newFile;
 		await this.leaf.openFile(newFile, { active: true });
-		this.chrome?.setTitle(newFile.basename);
 
 		await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 

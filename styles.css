@@ -86,91 +86,49 @@ body.today-sticky-popout .app-container {
 	padding-top: 0;
 }
 
-/* ============ Auto-hiding top bar ============ */
-/* Tiny 8px slim region by default — barely visible, just enough drag area
- * and hover-trigger height. Expands to 28px on hover to reveal buttons. */
+/* ============ Top-right button cluster ============ */
+/* Always visible, only on the right side; small and unobtrusive. The
+ * window itself is still draggable from the OS title bar area above the
+ * webview, so we don't need our own drag region. */
 .today-sticky-topbar {
 	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	height: 8px;
+	top: 4px;
+	right: 4px;
 	display: flex;
-	align-items: stretch;
+	align-items: center;
+	gap: 2px;
 	background: transparent;
 	z-index: 9999;
 	-webkit-user-select: none;
 	user-select: none;
-	overflow: hidden;
-	transition: height 0.2s ease, background 0.18s ease, backdrop-filter 0.18s ease;
-}
-.today-sticky-topbar:hover {
-	height: 28px;
-	background: rgba(20, 20, 20, 0.55);
-	backdrop-filter: blur(14px);
-	-webkit-backdrop-filter: blur(14px);
-}
-
-.today-sticky-drag {
-	flex: 1;
-	height: 100%;
-	-webkit-app-region: drag;
-	display: flex;
-	align-items: center;
-	overflow: hidden;
-}
-
-/* Title text shown inside the drag region. Hidden in expanded mode (the
- * editor already shows the file content); visible when collapsed so the
- * 1-line bar is informative. */
-.today-sticky-title {
-	font-size: 12px;
-	font-weight: 500;
-	color: var(--text-muted, #aaa);
-	padding: 0 10px;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	opacity: 0;
-	transition: opacity 0.18s ease;
-	-webkit-app-region: drag;
-	pointer-events: none;
-}
-.today-sticky-topbar:hover .today-sticky-title {
-	opacity: 0.7;
-}
-body.today-sticky-collapsed .today-sticky-title {
-	opacity: 0.95;
 }
 
 .today-sticky-btn {
 	-webkit-app-region: no-drag;
-	width: 28px;
-	height: 28px;
+	width: 18px;
+	height: 18px;
 	flex-shrink: 0;
 	border: none;
 	background: transparent;
 	color: var(--text-muted, #aaa);
 	cursor: pointer;
-	font-size: 12px;
-	line-height: 28px;
+	font-size: 11px;
+	line-height: 18px;
 	padding: 0;
+	border-radius: 3px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	opacity: 0;
-	transition: opacity 0.18s ease, background 0.12s ease;
-}
-.today-sticky-topbar:hover .today-sticky-btn {
-	opacity: 0.85;
+	opacity: 0.35;
+	transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
 }
 .today-sticky-btn:hover {
-	opacity: 1 !important;
+	opacity: 1;
 	background: rgba(255, 255, 255, 0.12);
 	color: var(--text-normal, #fff);
 }
 .today-sticky-btn.close:hover {
-	background: rgba(220, 38, 38, 0.7);
+	background: rgba(220, 38, 38, 0.65);
 	color: #fff;
 }
 
@@ -272,22 +230,30 @@ body.today-sticky-popout .cm-content {
 	caret-color: var(--text-accent, #7c93cc);
 }
 
-/* ============ Collapsed mode (single-line title bar) ============ */
-/* When collapsed, expand the top bar to fill the 32px window and hide the
- * editor/overlay below. */
-body.today-sticky-collapsed .horizontal-main-container,
-body.today-sticky-collapsed .app-container,
-body.today-sticky-collapsed .workspace,
-body.today-sticky-collapsed .workspace-leaf-content,
+/* ============ Collapsed mode (one-line peek of editor at cursor) ============ */
+/* The window itself is shrunk to ~60px via setBounds; OS title bar takes
+ * ~28px and the remaining ~32px shows the editor's current cursor line.
+ * CodeMirror auto-scrolls the cursor line into view, so no event-listening
+ * or title-modifying logic is needed. We only:
+ *  - hide the previous-note overlay (no room)
+ *  - lock overflow on the editor scroller so the user can't scroll the
+ *    cursor line out of view
+ *  - hide the line-number gutter (already hidden globally, kept for clarity)
+ */
 body.today-sticky-collapsed .today-sticky-prev-overlay {
 	display: none !important;
 }
-body.today-sticky-collapsed .today-sticky-topbar {
-	height: 32px;
-	background: rgba(20, 20, 20, 0.7);
-	backdrop-filter: blur(14px);
-	-webkit-backdrop-filter: blur(14px);
+body.today-sticky-collapsed .cm-scroller {
+	overflow: hidden !important;
 }
+body.today-sticky-collapsed .cm-gutters {
+	display: none !important;
+}
+/* Buttons stay visible (they're already always-on); make them slightly
+ * more solid so they're readable against the editor underneath. */
 body.today-sticky-collapsed .today-sticky-btn {
-	opacity: 0.85;
+	opacity: 0.7;
+	background: rgba(20, 20, 20, 0.5);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
 }

@@ -11,14 +11,12 @@ export interface ChromeHandle {
 	uninstall: () => void;
 	setPinned: (pinned: boolean) => void;
 	setCollapsed: (collapsed: boolean) => void;
-	setTitle: (text: string) => void;
 }
 
 export function installChrome(
 	leaf: WorkspaceLeaf,
 	callbacks: ChromeCallbacks,
 	initialPinned: boolean,
-	initialTitle: string,
 ): ChromeHandle {
 	const doc = getPopoutDocument(leaf);
 	if (!doc) {
@@ -26,7 +24,6 @@ export function installChrome(
 			uninstall: () => {},
 			setPinned: () => {},
 			setCollapsed: () => {},
-			setTitle: () => {},
 		};
 	}
 
@@ -35,31 +32,19 @@ export function installChrome(
 	const bar = doc.createElement("div");
 	bar.className = "today-sticky-topbar";
 
-	const dragRegion = doc.createElement("div");
-	dragRegion.className = "today-sticky-drag";
-
-	// Title element shown inside the drag region. It stays present at all
-	// times but is only visible when the window is collapsed.
-	const titleEl = doc.createElement("span");
-	titleEl.className = "today-sticky-title";
-	titleEl.textContent = initialTitle;
-	dragRegion.appendChild(titleEl);
-
-	bar.appendChild(dragRegion);
-
-	const pinBtn = makeBtn(doc, "today-sticky-btn pin", initialPinned ? "📌" : "📍", () => {
+	const pinBtn = makeBtn(doc, "today-sticky-btn pin", "●", () => {
 		const next = callbacks.onTogglePin();
 		updatePinBtn(pinBtn, next);
 	});
 	updatePinBtn(pinBtn, initialPinned);
 
-	const collapseBtn = makeBtn(doc, "today-sticky-btn collapse", "—", () => {
+	const collapseBtn = makeBtn(doc, "today-sticky-btn collapse", "–", () => {
 		const next = callbacks.onToggleCollapse();
 		updateCollapseBtn(collapseBtn, next);
 	});
 	updateCollapseBtn(collapseBtn, false);
 
-	const closeBtn = makeBtn(doc, "today-sticky-btn close", "✕", callbacks.onClose);
+	const closeBtn = makeBtn(doc, "today-sticky-btn close", "×", callbacks.onClose);
 	closeBtn.title = "Close";
 
 	bar.appendChild(pinBtn);
@@ -79,9 +64,6 @@ export function installChrome(
 			doc.body.classList.toggle("today-sticky-collapsed", collapsed);
 			updateCollapseBtn(collapseBtn, collapsed);
 		},
-		setTitle: (text) => {
-			titleEl.textContent = text;
-		},
 	};
 }
 
@@ -98,11 +80,11 @@ function makeBtn(doc: Document, cls: string, text: string, onClick: () => void):
 }
 
 function updatePinBtn(btn: HTMLButtonElement, pinned: boolean): void {
-	btn.textContent = pinned ? "📌" : "📍";
-	btn.title = pinned ? "Pinned — always on top (click to unpin)" : "Not pinned (click to pin on top)";
+	btn.textContent = pinned ? "●" : "○";
+	btn.title = pinned ? "Pinned (always on top) — click to unpin" : "Click to pin on top";
 }
 
 function updateCollapseBtn(btn: HTMLButtonElement, collapsed: boolean): void {
-	btn.textContent = collapsed ? "▣" : "—";
-	btn.title = collapsed ? "Expand" : "Collapse to title";
+	btn.textContent = collapsed ? "▢" : "–";
+	btn.title = collapsed ? "Expand" : "Collapse to single line";
 }
