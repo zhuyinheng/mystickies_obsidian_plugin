@@ -61,11 +61,11 @@ body.today-sticky-popout ::-webkit-scrollbar {
 	height: 4px;
 }
 body.today-sticky-popout ::-webkit-scrollbar-thumb {
-	background: rgba(255, 255, 255, 0.08);
+	background: var(--scrollbar-thumb-bg, rgba(255, 255, 255, 0.08));
 	border-radius: 2px;
 }
 body.today-sticky-popout ::-webkit-scrollbar-thumb:hover {
-	background: rgba(255, 255, 255, 0.2);
+	background: var(--scrollbar-active-thumb-bg, rgba(255, 255, 255, 0.2));
 }
 body.today-sticky-popout ::-webkit-scrollbar-track {
 	background: transparent;
@@ -77,26 +77,26 @@ body.today-sticky-popout .markdown-preview-view {
 	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
-/* Reserve the 18px drag/title strip at the top of the editor area. */
+/* Reserve the 14px drag/title strip at the top of the editor area. */
 body.today-sticky-popout .horizontal-main-container,
 body.today-sticky-popout .app-container {
-	padding-top: 18px;
+	padding-top: 14px;
 }
 
-/* ============ Always-visible 18px drag strip + right-aligned buttons ====== */
-/* Full-width 18px bar pinned to top. Consistent dark backdrop matching the
- * rest of the popout's translucent style; doesn't fade based on hover. The
- * whole bar is the drag region (via the .today-sticky-drag spacer that fills
- * the leftover space); buttons opt out with no-drag. */
+/* ============ Always-visible 14px drag strip + right-aligned buttons ======
+ * Theme-aware: uses Obsidian CSS variables so dark/light/custom themes all
+ * blend in. The whole bar is the drag region (via the .today-sticky-drag
+ * spacer that fills the leftover space); buttons opt out with no-drag. */
 .today-sticky-topbar {
 	position: fixed;
 	top: 0;
 	left: 0;
 	right: 0;
-	height: 18px;
+	height: 14px;
 	display: flex;
 	align-items: center;
-	background: rgba(20, 20, 20, 0.55);
+	background: var(--titlebar-background, var(--background-secondary, rgba(20, 20, 20, 0.55)));
+	border-bottom: 1px solid var(--background-modifier-border, transparent);
 	z-index: 9999;
 	-webkit-user-select: none;
 	user-select: none;
@@ -112,31 +112,31 @@ body.today-sticky-popout .app-container {
 
 .today-sticky-btn {
 	-webkit-app-region: no-drag;
-	width: 18px;
-	height: 18px;
+	width: 14px;
+	height: 14px;
 	flex-shrink: 0;
 	border: none;
 	background: transparent;
 	color: var(--text-muted, #aaa);
 	cursor: pointer;
-	font-size: 11px;
-	line-height: 18px;
+	font-size: 9px;
+	line-height: 14px;
 	padding: 0;
-	border-radius: 3px;
+	border-radius: 2px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	opacity: 0.5;
+	opacity: 0.6;
 	transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
 }
 .today-sticky-btn:hover {
 	opacity: 1;
-	background: rgba(255, 255, 255, 0.12);
-	color: var(--text-normal, #fff);
+	background: var(--background-modifier-hover, rgba(255, 255, 255, 0.12));
+	color: var(--text-normal);
 }
 .today-sticky-btn.close:hover {
-	background: rgba(220, 38, 38, 0.65);
-	color: #fff;
+	background: var(--background-modifier-error, rgba(220, 38, 38, 0.65));
+	color: var(--text-on-accent, #fff);
 }
 
 /* ============ Editor refinement ============ */
@@ -168,7 +168,7 @@ body.today-sticky-popout .markdown-embed {
 	overflow: hidden;
 	opacity: 0.55;
 	font-size: 0.85em;
-	background: rgba(255, 255, 255, 0.025);
+	background: var(--background-modifier-cover, rgba(255, 255, 255, 0.025));
 	border: none !important;
 	border-radius: 6px;
 	padding: 4px 8px !important;
@@ -184,7 +184,7 @@ body.today-sticky-popout .markdown-embed::after {
 	right: 0;
 	bottom: 0;
 	height: 24px;
-	background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.3));
+	background: linear-gradient(to bottom, transparent, var(--background-modifier-cover, rgba(0, 0, 0, 0.3)));
 	pointer-events: none;
 	transition: opacity 0.18s ease;
 }
@@ -192,7 +192,7 @@ body.today-sticky-popout .markdown-embed:hover {
 	max-height: 320px;
 	overflow-y: auto;
 	opacity: 1;
-	background: rgba(255, 255, 255, 0.04);
+	background: var(--background-secondary, rgba(255, 255, 255, 0.04));
 }
 body.today-sticky-popout .markdown-embed:hover::after {
 	opacity: 0;
@@ -201,13 +201,13 @@ body.today-sticky-popout .markdown-embed:hover::after {
 body.today-sticky-popout .markdown-embed-title {
 	font-size: 0.82em;
 	font-weight: 500;
-	color: var(--text-faint, #777);
+	color: var(--text-faint);
 	letter-spacing: 0.02em;
 	margin-bottom: 2px;
 	transition: color 0.12s ease;
 }
 body.today-sticky-popout .markdown-embed:hover .markdown-embed-title {
-	color: var(--text-accent, #7c93cc);
+	color: var(--text-accent);
 }
 body.today-sticky-popout .markdown-embed-link {
 	opacity: 0.4;
@@ -218,7 +218,7 @@ body.today-sticky-popout .markdown-embed:hover .markdown-embed-link {
 
 body.today-sticky-popout .markdown-embed-content {
 	font-size: 0.95em;
-	color: var(--text-muted, #aaa);
+	color: var(--text-muted);
 }
 body.today-sticky-popout .markdown-embed-content > * {
 	margin-block-start: 0.15em !important;
