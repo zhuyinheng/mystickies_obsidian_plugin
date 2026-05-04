@@ -3,6 +3,7 @@ import type TodayStickyPlugin from "./main";
 import {
 	configureStickyWindow,
 	getBrowserWindowForLeaf,
+	getPopoutDocument,
 	getPopoutWindow,
 	type ElectronBrowserWindow,
 } from "./electronWindow";
@@ -10,10 +11,13 @@ import { ChromeHandle, installChrome } from "./chrome";
 import { PreviousOverlay } from "./previousOverlay";
 import { MidnightScheduler } from "./midnight";
 import { getDailyNoteSettings } from "obsidian-daily-notes-interface";
+import { FileTarget, type StickyTarget } from "./stickyTarget";
+import type { StickyManager } from "./stickyManager";
 
 const IDLE_OPACITY = 0.5;
 const ACTIVE_OPACITY = 1.0;
 const OPACITY_FADE_MS = 180;
+const COLLAPSED_HEIGHT = 32;
 
 export class StickyWindow {
 	private leaf: WorkspaceLeaf | null = null;
@@ -21,16 +25,29 @@ export class StickyWindow {
 	private chrome: ChromeHandle | null = null;
 	private overlay: PreviousOverlay | null = null;
 	private midnight: MidnightScheduler | null = null;
+	private currentFile: TFile | null = null;
 	private pinned = true;
+	private collapsed = false;
+	private expandedBounds: { x: number; y: number; width: number; height: number } | null = null;
 	private vaultEvtUnregister: Array<() => void> = [];
 	private rerenderOverlay = debounce(() => void this.refreshOverlay(), 150, true);
 	private opacityCleanup: (() => void) | null = null;
 	private opacityRaf: number | null = null;
+	private linkInterceptCleanup: (() => void) | null = null;
+	private titleObserver: MutationObserver | null = null;
 
-	constructor(private plugin: TodayStickyPlugin) {}
+	constructor(
+		private plugin: TodayStickyPlugin,
+		public readonly target: StickyTarget,
+		private manager: StickyManager,
+	) {}
+
+	isOpen(): boolean {
+		return this.leaf !== null && this.isLeafAttached(this.leaf);
+	}
 
 	async open(): Promise<void> {
-		if (!this.plugin.dailyNotes.ensureLoaded()) {
+		if (this.target.trackDate && !this.plugin.dailyNotes.ensureLoaded()) {
 			new Notice("Today's Note Sticky: enable the core Daily Notes plugin first.");
 			return;
 		}
@@ -40,16 +57,17 @@ export class StickyWindow {
 			return;
 		}
 
-		const today = await this.plugin.dailyNotes.getOrCreateToday();
-		if (!today) {
-			new Notice("Today's Note Sticky: failed to get or create today's daily note.");
+		const file = await this.target.resolve(this.plugin.app);
+		if (!file) {
+			new Notice("Today's Note Sticky: failed to resolve target file.");
 			return;
 		}
+		this.currentFile = file;
 
 		const leaf = this.plugin.app.workspace.openPopoutLeaf({
 			size: { width: 480, height: 720 },
 		});
-		await leaf.openFile(today, { active: true });
+		await leaf.openFile(file, { active: true });
 		this.leaf = leaf;
 
 		// Allow popout DOM to settle before applying chrome / overlay.
@@ -67,30 +85,38 @@ export class StickyWindow {
 		this.chrome = installChrome(
 			leaf,
 			{
-				onMinimize: () => this.bw?.minimize(),
+				onToggleCollapse: () => this.toggleCollapse(),
 				onClose: () => this.close(),
 				onTogglePin: () => this.togglePin(),
 			},
 			this.pinned,
+			file.basename,
 		);
 
-		this.overlay = new PreviousOverlay(this.plugin.app, leaf);
-		this.plugin.addChild(this.overlay);
-		if (this.overlay.install()) {
-			await this.refreshOverlay();
+		if (this.target.trackDate) {
+			this.overlay = new PreviousOverlay(this.plugin.app, leaf);
+			this.plugin.addChild(this.overlay);
+			if (this.overlay.install()) {
+				await this.refreshOverlay();
+			}
+			this.installVaultListeners();
+			this.installMidnightScheduler();
 		}
 
-		this.installVaultListeners();
 		this.installPopoutCloseListener();
-		this.installMidnightScheduler();
 		this.installOpacityHover(leaf);
+		this.installLinkInterceptor(leaf);
+		this.installTitleSuppressor(leaf);
 	}
 
 	async rollover(): Promise<void> {
+		if (!this.target.trackDate) return;
 		if (!this.leaf || !this.isLeafAttached(this.leaf)) return;
-		const newToday = await this.plugin.dailyNotes.getOrCreateToday();
-		if (!newToday) return;
-		await this.leaf.openFile(newToday, { active: true });
+		const newFile = await this.target.resolve(this.plugin.app);
+		if (!newFile) return;
+		this.currentFile = newFile;
+		await this.leaf.openFile(newFile, { active: true });
+		this.chrome?.setTitle(newFile.basename);
 
 		await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -114,6 +140,10 @@ export class StickyWindow {
 		}
 		this.opacityCleanup?.();
 		this.opacityCleanup = null;
+		this.linkInterceptCleanup?.();
+		this.linkInterceptCleanup = null;
+		this.titleObserver?.disconnect();
+		this.titleObserver = null;
 		this.midnight?.destroy();
 		this.midnight = null;
 		this.uninstallVaultListeners();
@@ -127,6 +157,8 @@ export class StickyWindow {
 		this.leaf?.detach();
 		this.leaf = null;
 		this.bw = null;
+		this.currentFile = null;
+		this.manager.unregister(this.target);
 	}
 
 	togglePin(): boolean {
@@ -138,6 +170,24 @@ export class StickyWindow {
 			console.warn("[today-sticky] togglePin failed", e);
 		}
 		return this.pinned;
+	}
+
+	toggleCollapse(): boolean {
+		if (!this.bw) return this.collapsed;
+		this.collapsed = !this.collapsed;
+		try {
+			if (this.collapsed) {
+				this.expandedBounds = this.bw.getBounds();
+				this.bw.setBounds({ height: COLLAPSED_HEIGHT });
+			} else if (this.expandedBounds) {
+				this.bw.setBounds({ height: this.expandedBounds.height });
+				this.expandedBounds = null;
+			}
+		} catch (e) {
+			console.warn("[today-sticky] toggleCollapse failed", e);
+		}
+		this.chrome?.setCollapsed(this.collapsed);
+		return this.collapsed;
 	}
 
 	private async refreshOverlay(): Promise<void> {
@@ -207,7 +257,7 @@ export class StickyWindow {
 		let currentValue = IDLE_OPACITY;
 		const animateTo = (target: number) => {
 			currentTarget = target;
-			if (this.opacityRaf !== null) return; // already animating
+			if (this.opacityRaf !== null) return;
 			const start = performance.now();
 			const from = currentValue;
 			const tick = () => {
@@ -217,13 +267,13 @@ export class StickyWindow {
 				}
 				const elapsed = performance.now() - start;
 				const t = Math.min(1, elapsed / OPACITY_FADE_MS);
-				const eased = t * t * (3 - 2 * t); // smoothstep
+				const eased = t * t * (3 - 2 * t);
 				const value = from + (currentTarget - from) * eased;
 				currentValue = value;
 				try {
 					this.bw.setOpacity(value);
 				} catch {
-					/* swallow late calls after window closed */
+					/* swallow */
 				}
 				if (t < 1) {
 					this.opacityRaf = popoutWin.requestAnimationFrame(tick);
@@ -254,9 +304,113 @@ export class StickyWindow {
 				popoutWin.removeEventListener("blur", onBlur);
 				this.bw?.setOpacity?.(1.0);
 			} catch {
-				/* window may already be torn down */
+				/* */
 			}
 		};
+	}
+
+	/**
+	 * Intercept clicks on internal links inside the popout. The sticky never
+	 * navigates to a new file in-place; instead:
+	 *   - plain click  → open in the main Obsidian window (focuses it)
+	 *   - cmd/ctrl+click → spawn a NEW sticky window for that link
+	 */
+	private installLinkInterceptor(leaf: WorkspaceLeaf): void {
+		const doc = getPopoutDocument(leaf);
+		if (!doc) return;
+
+		const handler = (ev: MouseEvent) => {
+			const target = ev.target as HTMLElement | null;
+			if (!target) return;
+
+			const link = target.closest(
+				"a.internal-link, a[data-href], .cm-hmd-internal-link, .cm-link-alias, .cm-formatting-link, span.cm-underline",
+			) as HTMLElement | null;
+			if (!link) return;
+
+			const href = link.getAttribute("data-href")
+				|| link.getAttribute("href")
+				|| (link.textContent ?? "").trim();
+			if (!href) return;
+
+			// External http(s) links should fall through to default behavior.
+			if (/^[a-z][a-z0-9+.-]*:\/\//i.test(href) && !href.startsWith("obsidian://")) return;
+
+			ev.preventDefault();
+			ev.stopImmediatePropagation();
+
+			const newSticky = ev.metaKey || ev.ctrlKey;
+			if (newSticky) {
+				void this.openLinkAsSticky(href);
+			} else {
+				void this.openLinkInMain(href);
+			}
+		};
+
+		doc.addEventListener("click", handler, true);
+		doc.addEventListener("auxclick", handler, true);
+		this.linkInterceptCleanup = () => {
+			doc.removeEventListener("click", handler, true);
+			doc.removeEventListener("auxclick", handler, true);
+		};
+	}
+
+	private resolveLinkText(linktext: string): TFile | null {
+		const sourcePath = this.currentFile?.path ?? "";
+		return this.plugin.app.metadataCache.getFirstLinkpathDest(linktext, sourcePath);
+	}
+
+	private async openLinkInMain(linktext: string): Promise<void> {
+		const file = this.resolveLinkText(linktext);
+		if (!file) {
+			new Notice(`Today's Note Sticky: cannot resolve link "${linktext}"`);
+			return;
+		}
+		const mainLeaves: WorkspaceLeaf[] = [];
+		this.plugin.app.workspace.iterateRootLeaves((l) => {
+			mainLeaves.push(l);
+		});
+		const mainLeaf = mainLeaves[0];
+		if (!mainLeaf) {
+			new Notice("Today's Note Sticky: no main Obsidian leaf to open link in.");
+			return;
+		}
+		await mainLeaf.openFile(file);
+		this.plugin.app.workspace.setActiveLeaf(mainLeaf, { focus: true });
+		try {
+			window.focus();
+		} catch {
+			/* */
+		}
+	}
+
+	private async openLinkAsSticky(linktext: string): Promise<void> {
+		const file = this.resolveLinkText(linktext);
+		if (!file) {
+			new Notice(`Today's Note Sticky: cannot resolve link "${linktext}"`);
+			return;
+		}
+		await this.manager.openTarget(new FileTarget(file.path));
+	}
+
+	/**
+	 * Keep the OS title bar text empty so the popout reads as a true sticky
+	 * tile. Obsidian writes "<file> - <vault> - Obsidian" into document.title
+	 * on every file change; we observe and reset.
+	 */
+	private installTitleSuppressor(leaf: WorkspaceLeaf): void {
+		const doc = getPopoutDocument(leaf);
+		if (!doc) return;
+		const titleEl = doc.querySelector("title");
+		if (!titleEl) return;
+		titleEl.textContent = "";
+		const obs = new MutationObserver(() => {
+			if (titleEl.textContent && titleEl.textContent.length > 0) {
+				titleEl.textContent = "";
+			}
+		});
+		obs.observe(titleEl, { childList: true, characterData: true, subtree: true });
+		this.titleObserver = obs;
 	}
 
 	private isLeafAttached(leaf: WorkspaceLeaf): boolean {

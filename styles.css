@@ -6,13 +6,27 @@
 /* ============ Hide all default Obsidian chrome inside the popout ============ */
 body.today-sticky-popout .titlebar,
 body.today-sticky-popout .titlebar-inner,
+body.today-sticky-popout .titlebar-text,
+body.today-sticky-popout .titlebar-button-container,
 body.today-sticky-popout .workspace-tab-header-container,
+body.today-sticky-popout .workspace-tab-header-container-inner,
 body.today-sticky-popout .workspace-tab-header,
+body.today-sticky-popout .workspace-tab-container-before,
+body.today-sticky-popout .workspace-tab-container-after,
 body.today-sticky-popout .workspace-ribbon,
 body.today-sticky-popout .view-header,
+body.today-sticky-popout .view-header-icon,
+body.today-sticky-popout .view-header-title-container,
+body.today-sticky-popout .view-actions,
 body.today-sticky-popout .status-bar,
 body.today-sticky-popout .mod-root > .workspace-split:not(.mod-vertical):not(.mod-horizontal) {
 	display: none !important;
+}
+
+/* Belt-and-suspenders: zero out any nav header padding the tab strip would
+ * normally reserve. */
+body.today-sticky-popout .workspace-leaf-content {
+	padding-top: 0 !important;
 }
 
 body.today-sticky-popout .titlebar {
@@ -97,6 +111,32 @@ body.today-sticky-popout .app-container {
 	flex: 1;
 	height: 100%;
 	-webkit-app-region: drag;
+	display: flex;
+	align-items: center;
+	overflow: hidden;
+}
+
+/* Title text shown inside the drag region. Hidden in expanded mode (the
+ * editor already shows the file content); visible when collapsed so the
+ * 1-line bar is informative. */
+.today-sticky-title {
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-muted, #aaa);
+	padding: 0 10px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	opacity: 0;
+	transition: opacity 0.18s ease;
+	-webkit-app-region: drag;
+	pointer-events: none;
+}
+.today-sticky-topbar:hover .today-sticky-title {
+	opacity: 0.7;
+}
+body.today-sticky-collapsed .today-sticky-title {
+	opacity: 0.95;
 }
 
 .today-sticky-btn {
@@ -225,4 +265,24 @@ body.today-sticky-popout .cm-gutters {
 /* Cursor / selection: keep visible against translucent bg */
 body.today-sticky-popout .cm-content {
 	caret-color: var(--text-accent, #7c93cc);
+}
+
+/* ============ Collapsed mode (single-line title bar) ============ */
+/* When collapsed, hide everything except the top bar. The OS-level
+ * setBounds shrinks the window to ~32px high; this CSS makes sure no
+ * editor / overlay leaks through if window resize lags. */
+body.today-sticky-collapsed .horizontal-main-container,
+body.today-sticky-collapsed .app-container,
+body.today-sticky-collapsed .workspace,
+body.today-sticky-collapsed .workspace-leaf-content,
+body.today-sticky-collapsed .today-sticky-prev-overlay {
+	display: none !important;
+}
+body.today-sticky-collapsed .today-sticky-topbar {
+	background: rgba(20, 20, 20, 0.7);
+	backdrop-filter: blur(14px);
+	-webkit-backdrop-filter: blur(14px);
+}
+body.today-sticky-collapsed .today-sticky-topbar .today-sticky-btn {
+	opacity: 0.85;
 }
