@@ -8,6 +8,7 @@ import {
 } from "./electronWindow";
 import { ChromeHandle, installChrome } from "./chrome";
 import { PreviousOverlay } from "./previousOverlay";
+import { MidnightScheduler } from "./midnight";
 import { getDailyNoteSettings } from "obsidian-daily-notes-interface";
 
 export class StickyWindow {
@@ -15,6 +16,7 @@ export class StickyWindow {
 	private bw: ElectronBrowserWindow | null = null;
 	private chrome: ChromeHandle | null = null;
 	private overlay: PreviousOverlay | null = null;
+	private midnight: MidnightScheduler | null = null;
 	private pinned = true;
 	private vaultEvtUnregister: Array<() => void> = [];
 	private rerenderOverlay = debounce(() => void this.refreshOverlay(), 150, true);
@@ -73,6 +75,23 @@ export class StickyWindow {
 
 		this.installVaultListeners();
 		this.installPopoutCloseListener();
+		this.installMidnightScheduler();
+	}
+
+	async rollover(): Promise<void> {
+		if (!this.leaf || !this.isLeafAttached(this.leaf)) return;
+		const newToday = await this.plugin.dailyNotes.getOrCreateToday();
+		if (!newToday) return;
+		await this.leaf.openFile(newToday, { active: true });
+
+		await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+		if (this.overlay) {
+			this.overlay.uninstall();
+			if (this.overlay.install()) {
+				await this.refreshOverlay();
+			}
+		}
 	}
 
 	focus(): void {
@@ -81,6 +100,8 @@ export class StickyWindow {
 	}
 
 	close(): void {
+		this.midnight?.destroy();
+		this.midnight = null;
 		this.uninstallVaultListeners();
 		if (this.overlay) {
 			this.overlay.uninstall();
@@ -151,6 +172,14 @@ export class StickyWindow {
 		if (!win) return;
 		const handler = () => this.close();
 		win.addEventListener("beforeunload", handler, { once: true });
+	}
+
+	private installMidnightScheduler(): void {
+		this.midnight = new MidnightScheduler(() => this.rollover());
+		this.midnight.start();
+		const popoutWin = this.leaf ? getPopoutWindow(this.leaf) : null;
+		if (popoutWin) this.midnight.attachFocusGuard(popoutWin);
+		this.midnight.attachFocusGuard(window);
 	}
 
 	private isLeafAttached(leaf: WorkspaceLeaf): boolean {

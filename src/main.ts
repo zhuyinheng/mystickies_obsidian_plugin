@@ -35,6 +35,15 @@ export default class TodayStickyPlugin extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: "today-sticky-debug-rollover",
+			name: "[Debug] Force rollover to today's note now",
+			callback: async () => {
+				await this.stickyWindow.rollover();
+				console.log("[today-sticky] manual rollover complete");
+			},
+		});
+
 		this.app.workspace.onLayoutReady(() => {
 			void this.stickyWindow.open();
 		});
