@@ -76,12 +76,6 @@ body.today-sticky-popout ::-webkit-scrollbar-track {
 	background: transparent;
 }
 
-/* Subtle text shadow so text stays readable against light desktops */
-body.today-sticky-popout .cm-content,
-body.today-sticky-popout .markdown-preview-view {
-	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-}
-
 /* Reserve the 14px drag/title strip at the top of the editor area. */
 body.today-sticky-popout .horizontal-main-container,
 body.today-sticky-popout .app-container {
