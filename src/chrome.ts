@@ -10,18 +10,21 @@ export interface ChromeCallbacks {
 export interface ChromeHandle {
 	uninstall: () => void;
 	setPinned: (pinned: boolean) => void;
+	setTitle: (text: string) => void;
 }
 
 export function installChrome(
 	leaf: WorkspaceLeaf,
 	callbacks: ChromeCallbacks,
 	initialPinned: boolean,
+	initialTitle: string,
 ): ChromeHandle {
 	const doc = getPopoutDocument(leaf);
 	if (!doc) {
 		return {
 			uninstall: () => {},
 			setPinned: () => {},
+			setTitle: () => {},
 		};
 	}
 
@@ -30,10 +33,16 @@ export function installChrome(
 	const bar = doc.createElement("div");
 	bar.className = "today-sticky-topbar";
 
-	// Spacer absorbs the leftover space and is the actual drag region.
-	// Buttons opt out via -webkit-app-region: no-drag in CSS.
+	// Drag region also serves as the title carrier. Title text is centred-
+	// left in the bar; the rest of the drag region is empty padding.
 	const drag = doc.createElement("div");
 	drag.className = "today-sticky-drag";
+
+	const titleEl = doc.createElement("span");
+	titleEl.className = "today-sticky-title";
+	titleEl.textContent = initialTitle;
+	drag.appendChild(titleEl);
+
 	bar.appendChild(drag);
 
 	const pinBtn = makeBtn(doc, "today-sticky-btn pin", "●", () => {
@@ -60,6 +69,9 @@ export function installChrome(
 			doc.body.classList.remove("today-sticky-popout");
 		},
 		setPinned: (pinned) => updatePinBtn(pinBtn, pinned),
+		setTitle: (text) => {
+			titleEl.textContent = text;
+		},
 	};
 }
 

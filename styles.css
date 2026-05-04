@@ -34,9 +34,12 @@ body.today-sticky-popout .titlebar {
 	min-height: 0 !important;
 }
 
-/* ============ Translucent / vibrancy backdrop ============ */
+/* ============ Theme-coloured backdrop ============ */
+/* Solid Obsidian theme bg (no more vibrancy/frosted glass). The window-
+ * level setOpacity still makes the whole popout fade to translucent in
+ * idle so other apps show through. */
 body.today-sticky-popout {
-	background: transparent !important;
+	background: var(--background-primary) !important;
 	border-radius: 12px;
 	overflow: hidden;
 }
@@ -108,6 +111,25 @@ body.today-sticky-popout .app-container {
 	flex: 1;
 	height: 100%;
 	-webkit-app-region: drag;
+	display: flex;
+	align-items: center;
+	overflow: hidden;
+}
+
+/* File name shown in the drag region; this is the only visible "title" — the
+ * editor's view-header is hidden so the filename doesn't get duplicated. */
+.today-sticky-title {
+	font-size: 9px;
+	font-weight: 500;
+	color: var(--text-muted);
+	padding: 0 6px;
+	line-height: 14px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	pointer-events: none;
+	letter-spacing: 0.02em;
+	-webkit-app-region: drag;
 }
 
 .today-sticky-btn {
@@ -164,15 +186,15 @@ body.today-sticky-popout .cm-content {
  * sticky's content and you get the same effect, with no special code
  * path for "today" or "previous date". */
 body.today-sticky-popout .markdown-embed {
-	max-height: 80px;
+	max-height: 48px;
 	overflow: hidden;
-	opacity: 0.55;
-	font-size: 0.85em;
+	opacity: 0.5;
+	font-size: 0.75em;
 	background: var(--background-modifier-cover, rgba(255, 255, 255, 0.025));
 	border: none !important;
-	border-radius: 6px;
-	padding: 4px 8px !important;
-	margin: 6px 0 !important;
+	border-radius: 4px;
+	padding: 2px 6px !important;
+	margin: 4px 0 !important;
 	position: relative;
 	transition: max-height 0.25s ease, opacity 0.18s ease, background 0.18s ease;
 }
@@ -183,13 +205,13 @@ body.today-sticky-popout .markdown-embed::after {
 	left: 0;
 	right: 0;
 	bottom: 0;
-	height: 24px;
+	height: 18px;
 	background: linear-gradient(to bottom, transparent, var(--background-modifier-cover, rgba(0, 0, 0, 0.3)));
 	pointer-events: none;
 	transition: opacity 0.18s ease;
 }
 body.today-sticky-popout .markdown-embed:hover {
-	max-height: 320px;
+	max-height: 220px;
 	overflow-y: auto;
 	opacity: 1;
 	background: var(--background-secondary, rgba(255, 255, 255, 0.04));
@@ -199,11 +221,11 @@ body.today-sticky-popout .markdown-embed:hover::after {
 }
 
 body.today-sticky-popout .markdown-embed-title {
-	font-size: 0.82em;
+	font-size: 0.75em;
 	font-weight: 500;
 	color: var(--text-faint);
 	letter-spacing: 0.02em;
-	margin-bottom: 2px;
+	margin-bottom: 1px;
 	transition: color 0.12s ease;
 }
 body.today-sticky-popout .markdown-embed:hover .markdown-embed-title {
@@ -217,16 +239,65 @@ body.today-sticky-popout .markdown-embed:hover .markdown-embed-link {
 }
 
 body.today-sticky-popout .markdown-embed-content {
-	font-size: 0.95em;
+	font-size: 0.9em;
 	color: var(--text-muted);
 }
 body.today-sticky-popout .markdown-embed-content > * {
-	margin-block-start: 0.15em !important;
-	margin-block-end: 0.15em !important;
+	margin-block-start: 0.1em !important;
+	margin-block-end: 0.1em !important;
 }
 body.today-sticky-popout .markdown-embed-content h1,
 body.today-sticky-popout .markdown-embed-content h2,
 body.today-sticky-popout .markdown-embed-content h3 {
-	font-size: 1em !important;
+	font-size: 0.95em !important;
 	font-weight: 500 !important;
+}
+
+/* ============ Properties / YAML frontmatter — compact + dim ============ */
+/* Live preview / reading mode: the "Properties" panel.
+ *  - max-height collapsed by default (only the heading visible)
+ *  - dim opacity, smaller font
+ *  - hover expands like an embed card */
+body.today-sticky-popout .metadata-container {
+	max-height: 22px;
+	overflow: hidden;
+	opacity: 0.4;
+	font-size: 0.75em;
+	border: none !important;
+	border-radius: 4px;
+	background: var(--background-modifier-cover, rgba(255, 255, 255, 0.02));
+	margin: 4px 0 !important;
+	padding: 2px 6px !important;
+	transition: max-height 0.25s ease, opacity 0.18s ease, background 0.18s ease;
+}
+body.today-sticky-popout .metadata-container:hover {
+	max-height: 240px;
+	overflow-y: auto;
+	opacity: 1;
+	background: var(--background-secondary, rgba(255, 255, 255, 0.04));
+}
+body.today-sticky-popout .metadata-properties-heading {
+	font-size: 0.85em;
+	color: var(--text-faint);
+	padding: 0 !important;
+	min-height: 16px !important;
+}
+body.today-sticky-popout .metadata-properties {
+	font-size: 0.9em;
+}
+body.today-sticky-popout .metadata-property {
+	min-height: 18px !important;
+	padding: 1px 0 !important;
+}
+body.today-sticky-popout .metadata-property-key,
+body.today-sticky-popout .metadata-property-value {
+	font-size: 0.95em;
+}
+
+/* Source mode: dim the raw frontmatter --- block */
+body.today-sticky-popout .cm-line:has(.cm-hmd-frontmatter),
+body.today-sticky-popout .cm-line .HyperMD-frontmatter,
+body.today-sticky-popout .cm-hmd-frontmatter {
+	opacity: 0.45;
+	font-size: 0.85em;
 }

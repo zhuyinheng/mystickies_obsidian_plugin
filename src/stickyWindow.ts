@@ -64,7 +64,6 @@ export class StickyWindow {
 		configureStickyWindow(this.bw, {
 			alwaysOnTop: true,
 			visibleOnAllWorkspaces: true,
-			vibrancy: true,
 			hideTrafficLights: true,
 		});
 
@@ -76,6 +75,7 @@ export class StickyWindow {
 				onOpenInMain: () => void this.openCurrentInMain(),
 			},
 			this.pinned,
+			file.basename,
 		);
 
 		this.installPopoutCloseListener();

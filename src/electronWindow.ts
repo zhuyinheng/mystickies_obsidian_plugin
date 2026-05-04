@@ -37,7 +37,6 @@ export function getBrowserWindowForLeaf(leaf: WorkspaceLeaf): ElectronBrowserWin
 export interface StickyConfig {
 	alwaysOnTop: boolean;
 	visibleOnAllWorkspaces: boolean;
-	vibrancy: boolean;
 	hideTrafficLights: boolean;
 }
 
@@ -72,13 +71,6 @@ export function configureStickyWindow(bw: ElectronBrowserWindow | null, config: 
 		console.warn("[today-sticky] setVisibleOnAllWorkspaces failed", e);
 	}
 	const platform = typeof process !== "undefined" ? process.platform : "";
-	try {
-		if (config.vibrancy && platform === "darwin") {
-			bw.setVibrancy?.("under-window");
-		}
-	} catch (e) {
-		console.warn("[today-sticky] setVibrancy failed", e);
-	}
 	try {
 		if (config.hideTrafficLights && platform === "darwin") {
 			bw.setWindowButtonVisibility?.(false);
