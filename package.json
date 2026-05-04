@@ -5,7 +5,9 @@
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"vault": "open -a Obsidian /Users/zhuyinheng/obsidian_test_vault",
+		"snap": "screencapture -x /tmp/today-sticky-snap.png && echo \"Saved to /tmp/today-sticky-snap.png\""
 	},
 	"keywords": [],
 	"author": "zhuyinheng",
