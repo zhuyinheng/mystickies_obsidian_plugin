@@ -34,6 +34,10 @@ export default class TodayStickyPlugin extends Plugin {
 				});
 			},
 		});
+
+		this.app.workspace.onLayoutReady(() => {
+			void this.stickyWindow.open();
+		});
 	}
 
 	onunload() {

@@ -1,8 +1,23 @@
-import { Notice, WorkspaceLeaf } from "obsidian";
+import { Notice, TAbstractFile, TFile, WorkspaceLeaf, debounce } from "obsidian";
 import type TodayStickyPlugin from "./main";
+import {
+	configureStickyWindow,
+	getBrowserWindowForLeaf,
+	getPopoutWindow,
+	type ElectronBrowserWindow,
+} from "./electronWindow";
+import { ChromeHandle, installChrome } from "./chrome";
+import { PreviousOverlay } from "./previousOverlay";
+import { getDailyNoteSettings } from "obsidian-daily-notes-interface";
 
 export class StickyWindow {
 	private leaf: WorkspaceLeaf | null = null;
+	private bw: ElectronBrowserWindow | null = null;
+	private chrome: ChromeHandle | null = null;
+	private overlay: PreviousOverlay | null = null;
+	private pinned = true;
+	private vaultEvtUnregister: Array<() => void> = [];
+	private rerenderOverlay = debounce(() => void this.refreshOverlay(), 150, true);
 
 	constructor(private plugin: TodayStickyPlugin) {}
 
@@ -28,6 +43,36 @@ export class StickyWindow {
 		});
 		await leaf.openFile(today, { active: true });
 		this.leaf = leaf;
+
+		// Allow popout DOM to settle before applying chrome / overlay.
+		await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+		this.bw = getBrowserWindowForLeaf(leaf);
+		this.pinned = true;
+		configureStickyWindow(this.bw, {
+			alwaysOnTop: true,
+			visibleOnAllWorkspaces: true,
+			vibrancy: true,
+		});
+
+		this.chrome = installChrome(
+			leaf,
+			{
+				onMinimize: () => this.bw?.minimize(),
+				onClose: () => this.close(),
+				onTogglePin: () => this.togglePin(),
+			},
+			this.pinned,
+		);
+
+		this.overlay = new PreviousOverlay(this.plugin.app, leaf);
+		this.plugin.addChild(this.overlay);
+		if (this.overlay.install()) {
+			await this.refreshOverlay();
+		}
+
+		this.installVaultListeners();
+		this.installPopoutCloseListener();
 	}
 
 	focus(): void {
@@ -36,8 +81,76 @@ export class StickyWindow {
 	}
 
 	close(): void {
+		this.uninstallVaultListeners();
+		if (this.overlay) {
+			this.overlay.uninstall();
+			this.plugin.removeChild(this.overlay);
+			this.overlay = null;
+		}
+		this.chrome?.uninstall();
+		this.chrome = null;
 		this.leaf?.detach();
 		this.leaf = null;
+		this.bw = null;
+	}
+
+	togglePin(): boolean {
+		if (!this.bw) return this.pinned;
+		this.pinned = !this.pinned;
+		try {
+			this.bw.setAlwaysOnTop(this.pinned, "floating");
+		} catch (e) {
+			console.warn("[today-sticky] togglePin failed", e);
+		}
+		return this.pinned;
+	}
+
+	private async refreshOverlay(): Promise<void> {
+		if (!this.overlay) return;
+		const prev = this.plugin.dailyNotes.findMostRecentPrevious();
+		await this.overlay.render(prev);
+	}
+
+	private installVaultListeners(): void {
+		const settings = getDailyNoteSettings();
+		const folder = (settings.folder ?? "").replace(/^\/|\/$/g, "");
+		const inDailyFolder = (path: string): boolean => {
+			if (!folder) return true;
+			return path === folder || path.startsWith(folder + "/");
+		};
+
+		const onChange = (file: TAbstractFile) => {
+			if (!(file instanceof TFile)) return;
+			if (!inDailyFolder(file.path)) return;
+			this.rerenderOverlay();
+		};
+		const onRename = (file: TAbstractFile, oldPath: string) => {
+			if (!(file instanceof TFile)) return;
+			if (!inDailyFolder(file.path) && !inDailyFolder(oldPath)) return;
+			this.rerenderOverlay();
+		};
+
+		const vault = this.plugin.app.vault;
+		const refCreate = vault.on("create", onChange);
+		const refDelete = vault.on("delete", onChange);
+		const refRename = vault.on("rename", onRename);
+		this.vaultEvtUnregister = [
+			() => vault.offref(refCreate),
+			() => vault.offref(refDelete),
+			() => vault.offref(refRename),
+		];
+	}
+
+	private uninstallVaultListeners(): void {
+		for (const off of this.vaultEvtUnregister) off();
+		this.vaultEvtUnregister = [];
+	}
+
+	private installPopoutCloseListener(): void {
+		const win = this.leaf ? getPopoutWindow(this.leaf) : null;
+		if (!win) return;
+		const handler = () => this.close();
+		win.addEventListener("beforeunload", handler, { once: true });
 	}
 
 	private isLeafAttached(leaf: WorkspaceLeaf): boolean {

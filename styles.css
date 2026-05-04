@@ -1,2 +1,130 @@
-/* Today's Note Sticky — styles for the popout window */
-/* Populated in step 5 (chrome.ts integration). */
+/* Today's Note Sticky — popout window styles */
+
+/* ------------ Hide default Obsidian chrome inside the sticky popout ------------ */
+body.today-sticky-popout .titlebar,
+body.today-sticky-popout .titlebar-inner,
+body.today-sticky-popout .workspace-tab-header-container,
+body.today-sticky-popout .workspace-tab-header,
+body.today-sticky-popout .view-header,
+body.today-sticky-popout .status-bar {
+	display: none !important;
+}
+
+body.today-sticky-popout .titlebar {
+	height: 0 !important;
+	min-height: 0 !important;
+}
+
+/* Push content down so the custom top bar doesn't cover it */
+body.today-sticky-popout .horizontal-main-container,
+body.today-sticky-popout .app-container {
+	padding-top: 28px;
+}
+
+/* ------------ Translucent / vibrancy backdrop ------------ */
+body.today-sticky-popout {
+	background: rgba(20, 20, 20, 0.55) !important;
+}
+body.today-sticky-popout .workspace,
+body.today-sticky-popout .workspace-split,
+body.today-sticky-popout .workspace-leaf,
+body.today-sticky-popout .workspace-leaf-content,
+body.today-sticky-popout .view-content,
+body.today-sticky-popout .markdown-source-view,
+body.today-sticky-popout .markdown-preview-view,
+body.today-sticky-popout .cm-editor,
+body.today-sticky-popout .cm-scroller {
+	background: transparent !important;
+}
+
+/* ------------ Custom top bar ------------ */
+.today-sticky-topbar {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 28px;
+	display: flex;
+	align-items: center;
+	background: rgba(20, 20, 20, 0.7);
+	backdrop-filter: blur(10px);
+	z-index: 9999;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+.today-sticky-drag {
+	flex: 1;
+	height: 100%;
+	-webkit-app-region: drag;
+}
+
+.today-sticky-btn {
+	-webkit-app-region: no-drag;
+	width: 32px;
+	height: 28px;
+	border: none;
+	background: transparent;
+	color: var(--text-normal, #ddd);
+	cursor: pointer;
+	font-size: 13px;
+	line-height: 28px;
+	padding: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.today-sticky-btn:hover {
+	background: rgba(255, 255, 255, 0.12);
+}
+.today-sticky-btn.close:hover {
+	background: rgba(220, 38, 38, 0.85);
+	color: #fff;
+}
+
+/* ------------ Previous note overlay ------------ */
+.today-sticky-prev-overlay {
+	margin: 6px 12px 12px;
+	padding: 8px 12px;
+	border-radius: 8px;
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	max-height: 200px;
+	overflow-y: auto;
+	font-size: 0.85em;
+	opacity: 0.85;
+	user-select: text;
+}
+.today-sticky-prev-overlay:hover {
+	opacity: 1;
+}
+
+.today-sticky-prev-header {
+	font-weight: 600;
+	margin-bottom: 4px;
+	color: var(--text-muted, #999);
+	font-size: 0.9em;
+}
+.today-sticky-prev-link {
+	color: var(--text-accent, #7c93cc);
+	text-decoration: none;
+	cursor: pointer;
+}
+.today-sticky-prev-link:hover {
+	text-decoration: underline;
+}
+
+.today-sticky-prev-body {
+	pointer-events: auto;
+}
+.today-sticky-prev-body * {
+	margin-block-start: 0.2em !important;
+	margin-block-end: 0.2em !important;
+}
+
+.today-sticky-prev-empty {
+	color: var(--text-faint, #666);
+	font-style: italic;
+	font-size: 0.85em;
+}
