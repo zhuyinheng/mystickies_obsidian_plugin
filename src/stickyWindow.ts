@@ -1,4 +1,4 @@
-import { Notice, TAbstractFile, TFile, WorkspaceLeaf, debounce } from "obsidian";
+import { Notice, TFile, WorkspaceLeaf } from "obsidian";
 import type TodayStickyPlugin from "./main";
 import {
 	configureStickyWindow,
@@ -8,33 +8,24 @@ import {
 	type ElectronBrowserWindow,
 } from "./electronWindow";
 import { ChromeHandle, installChrome } from "./chrome";
-import { PreviousOverlay } from "./previousOverlay";
-import { MidnightScheduler } from "./midnight";
-import { getDailyNoteSettings } from "obsidian-daily-notes-interface";
 import { FileTarget, type StickyTarget } from "./stickyTarget";
 import type { StickyManager } from "./stickyManager";
 
 const IDLE_OPACITY = 0.5;
 const ACTIVE_OPACITY = 1.0;
 const OPACITY_FADE_MS = 180;
-const COLLAPSED_HEIGHT = 60;
 
 export class StickyWindow {
 	private leaf: WorkspaceLeaf | null = null;
 	private bw: ElectronBrowserWindow | null = null;
 	private chrome: ChromeHandle | null = null;
-	private overlay: PreviousOverlay | null = null;
-	private midnight: MidnightScheduler | null = null;
 	private currentFile: TFile | null = null;
 	private pinned = true;
-	private collapsed = false;
-	private expandedBounds: { x: number; y: number; width: number; height: number } | null = null;
-	private vaultEvtUnregister: Array<() => void> = [];
-	private rerenderOverlay = debounce(() => void this.refreshOverlay(), 150, true);
 	private opacityCleanup: (() => void) | null = null;
 	private opacityRaf: number | null = null;
 	private linkInterceptCleanup: (() => void) | null = null;
 	private titleObserver: MutationObserver | null = null;
+	private bodyClassObserver: MutationObserver | null = null;
 
 	constructor(
 		private plugin: TodayStickyPlugin,
@@ -47,11 +38,6 @@ export class StickyWindow {
 	}
 
 	async open(): Promise<void> {
-		if (this.target.trackDate && !this.plugin.dailyNotes.ensureLoaded()) {
-			new Notice("Today's Note Sticky: enable the core Daily Notes plugin first.");
-			return;
-		}
-
 		if (this.leaf && this.isLeafAttached(this.leaf)) {
 			this.focus();
 			return;
@@ -70,7 +56,7 @@ export class StickyWindow {
 		await leaf.openFile(file, { active: true });
 		this.leaf = leaf;
 
-		// Allow popout DOM to settle before applying chrome / overlay.
+		// Allow popout DOM to settle before applying chrome.
 		await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 		this.bw = getBrowserWindowForLeaf(leaf);
@@ -85,45 +71,17 @@ export class StickyWindow {
 		this.chrome = installChrome(
 			leaf,
 			{
-				onToggleCollapse: () => this.toggleCollapse(),
 				onClose: () => this.close(),
 				onTogglePin: () => this.togglePin(),
 			},
 			this.pinned,
 		);
 
-		if (this.target.trackDate) {
-			this.overlay = new PreviousOverlay(this.plugin.app, leaf);
-			this.plugin.addChild(this.overlay);
-			if (this.overlay.install()) {
-				await this.refreshOverlay();
-			}
-			this.installVaultListeners();
-			this.installMidnightScheduler();
-		}
-
 		this.installPopoutCloseListener();
 		this.installOpacityHover(leaf);
 		this.installLinkInterceptor(leaf);
 		this.installTitleSuppressor(leaf);
-	}
-
-	async rollover(): Promise<void> {
-		if (!this.target.trackDate) return;
-		if (!this.leaf || !this.isLeafAttached(this.leaf)) return;
-		const newFile = await this.target.resolve(this.plugin.app);
-		if (!newFile) return;
-		this.currentFile = newFile;
-		await this.leaf.openFile(newFile, { active: true });
-
-		await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-
-		if (this.overlay) {
-			this.overlay.uninstall();
-			if (this.overlay.install()) {
-				await this.refreshOverlay();
-			}
-		}
+		this.installBodyClassGuard(leaf);
 	}
 
 	focus(): void {
@@ -142,14 +100,8 @@ export class StickyWindow {
 		this.linkInterceptCleanup = null;
 		this.titleObserver?.disconnect();
 		this.titleObserver = null;
-		this.midnight?.destroy();
-		this.midnight = null;
-		this.uninstallVaultListeners();
-		if (this.overlay) {
-			this.overlay.uninstall();
-			this.plugin.removeChild(this.overlay);
-			this.overlay = null;
-		}
+		this.bodyClassObserver?.disconnect();
+		this.bodyClassObserver = null;
 		this.chrome?.uninstall();
 		this.chrome = null;
 		this.leaf?.detach();
@@ -170,78 +122,11 @@ export class StickyWindow {
 		return this.pinned;
 	}
 
-	toggleCollapse(): boolean {
-		if (!this.bw) return this.collapsed;
-		this.collapsed = !this.collapsed;
-		try {
-			if (this.collapsed) {
-				this.expandedBounds = this.bw.getBounds();
-				this.bw.setBounds({ height: COLLAPSED_HEIGHT });
-			} else if (this.expandedBounds) {
-				this.bw.setBounds({ height: this.expandedBounds.height });
-				this.expandedBounds = null;
-			}
-		} catch (e) {
-			console.warn("[today-sticky] toggleCollapse failed", e);
-		}
-		this.chrome?.setCollapsed(this.collapsed);
-		return this.collapsed;
-	}
-
-	private async refreshOverlay(): Promise<void> {
-		if (!this.overlay) return;
-		const prev = this.plugin.dailyNotes.findMostRecentPrevious();
-		await this.overlay.render(prev);
-	}
-
-	private installVaultListeners(): void {
-		const settings = getDailyNoteSettings();
-		const folder = (settings.folder ?? "").replace(/^\/|\/$/g, "");
-		const inDailyFolder = (path: string): boolean => {
-			if (!folder) return true;
-			return path === folder || path.startsWith(folder + "/");
-		};
-
-		const onChange = (file: TAbstractFile) => {
-			if (!(file instanceof TFile)) return;
-			if (!inDailyFolder(file.path)) return;
-			this.rerenderOverlay();
-		};
-		const onRename = (file: TAbstractFile, oldPath: string) => {
-			if (!(file instanceof TFile)) return;
-			if (!inDailyFolder(file.path) && !inDailyFolder(oldPath)) return;
-			this.rerenderOverlay();
-		};
-
-		const vault = this.plugin.app.vault;
-		const refCreate = vault.on("create", onChange);
-		const refDelete = vault.on("delete", onChange);
-		const refRename = vault.on("rename", onRename);
-		this.vaultEvtUnregister = [
-			() => vault.offref(refCreate),
-			() => vault.offref(refDelete),
-			() => vault.offref(refRename),
-		];
-	}
-
-	private uninstallVaultListeners(): void {
-		for (const off of this.vaultEvtUnregister) off();
-		this.vaultEvtUnregister = [];
-	}
-
 	private installPopoutCloseListener(): void {
 		const win = this.leaf ? getPopoutWindow(this.leaf) : null;
 		if (!win) return;
 		const handler = () => this.close();
 		win.addEventListener("beforeunload", handler, { once: true });
-	}
-
-	private installMidnightScheduler(): void {
-		this.midnight = new MidnightScheduler(() => this.rollover());
-		this.midnight.start();
-		const popoutWin = this.leaf ? getPopoutWindow(this.leaf) : null;
-		if (popoutWin) this.midnight.attachFocusGuard(popoutWin);
-		this.midnight.attachFocusGuard(window);
 	}
 
 	private installOpacityHover(leaf: WorkspaceLeaf): void {
@@ -331,7 +216,6 @@ export class StickyWindow {
 				|| (link.textContent ?? "").trim();
 			if (!href) return;
 
-			// External http(s) links should fall through to default behavior.
 			if (/^[a-z][a-z0-9+.-]*:\/\//i.test(href) && !href.startsWith("obsidian://")) return;
 
 			ev.preventDefault();
@@ -409,6 +293,26 @@ export class StickyWindow {
 		});
 		obs.observe(titleEl, { childList: true, characterData: true, subtree: true });
 		this.titleObserver = obs;
+	}
+
+	/**
+	 * Keep `today-sticky-popout` on the popout's body. Obsidian rebuilds /
+	 * reassigns body.className on certain layout transitions (notably window
+	 * resize), which would otherwise drop our class and let all the hidden
+	 * tab/header chrome flash back in.
+	 */
+	private installBodyClassGuard(leaf: WorkspaceLeaf): void {
+		const doc = getPopoutDocument(leaf);
+		if (!doc) return;
+		const ensure = () => {
+			if (!doc.body.classList.contains("today-sticky-popout")) {
+				doc.body.classList.add("today-sticky-popout");
+			}
+		};
+		ensure();
+		const obs = new MutationObserver(ensure);
+		obs.observe(doc.body, { attributes: true, attributeFilter: ["class"] });
+		this.bodyClassObserver = obs;
 	}
 
 	private isLeafAttached(leaf: WorkspaceLeaf): boolean {

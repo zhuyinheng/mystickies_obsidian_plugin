@@ -73,14 +73,11 @@ body.today-sticky-popout ::-webkit-scrollbar-track {
 
 /* Subtle text shadow so text stays readable against light desktops */
 body.today-sticky-popout .cm-content,
-body.today-sticky-popout .markdown-preview-view,
-body.today-sticky-popout .today-sticky-prev-body {
+body.today-sticky-popout .markdown-preview-view {
 	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
-/* Top bar is position:fixed and transparent in idle state; content fills the
- * full window from y=0 so there's no reserved empty strip above the editor.
- * On hover the bar's translucent backdrop briefly overlaps the first line. */
+/* No reserved strip above the editor; content fills full window from y=0. */
 body.today-sticky-popout .horizontal-main-container,
 body.today-sticky-popout .app-container {
 	padding-top: 0;
@@ -132,87 +129,6 @@ body.today-sticky-popout .app-container {
 	color: #fff;
 }
 
-/* ============ Previous note overlay ============ */
-/* Tiny by default, expands on hover. */
-.today-sticky-prev-overlay {
-	margin: 8px 14px;
-	padding: 4px 8px;
-	border-radius: 6px;
-	background: rgba(255, 255, 255, 0.025);
-	border: none;
-	max-height: 80px;
-	overflow: hidden;
-	font-size: 0.8em;
-	opacity: 0.55;
-	user-select: text;
-	transition: opacity 0.18s ease, max-height 0.25s ease, background 0.18s ease;
-	position: relative;
-}
-.today-sticky-prev-overlay::after {
-	/* fade-out hint for clipped content */
-	content: "";
-	position: absolute;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	height: 24px;
-	background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.25));
-	pointer-events: none;
-	transition: opacity 0.18s ease;
-}
-.today-sticky-prev-overlay:hover {
-	opacity: 1;
-	max-height: 320px;
-	overflow-y: auto;
-	background: rgba(255, 255, 255, 0.04);
-}
-.today-sticky-prev-overlay:hover::after {
-	opacity: 0;
-}
-
-.today-sticky-prev-header {
-	font-weight: 500;
-	margin-bottom: 2px;
-	color: var(--text-faint, #777);
-	font-size: 0.82em;
-	letter-spacing: 0.02em;
-}
-.today-sticky-prev-link {
-	color: var(--text-faint, #777);
-	text-decoration: none;
-	cursor: pointer;
-	transition: color 0.12s ease;
-}
-.today-sticky-prev-overlay:hover .today-sticky-prev-link {
-	color: var(--text-accent, #7c93cc);
-}
-.today-sticky-prev-link:hover {
-	text-decoration: underline;
-}
-
-.today-sticky-prev-body {
-	pointer-events: auto;
-	font-size: 0.95em;
-	color: var(--text-muted, #aaa);
-}
-.today-sticky-prev-body * {
-	margin-block-start: 0.15em !important;
-	margin-block-end: 0.15em !important;
-}
-.today-sticky-prev-body h1,
-.today-sticky-prev-body h2,
-.today-sticky-prev-body h3 {
-	font-size: 1em !important;
-	font-weight: 500 !important;
-}
-
-.today-sticky-prev-empty {
-	color: var(--text-faint, #555);
-	font-style: italic;
-	font-size: 0.78em;
-	opacity: 0.5;
-}
-
 /* ============ Editor refinement ============ */
 /* Generous gutter so text doesn't crash into window edges */
 body.today-sticky-popout .markdown-source-view .cm-scroller,
@@ -228,32 +144,4 @@ body.today-sticky-popout .cm-gutters {
 /* Cursor / selection: keep visible against translucent bg */
 body.today-sticky-popout .cm-content {
 	caret-color: var(--text-accent, #7c93cc);
-}
-
-/* ============ Collapsed mode (one-line peek of editor at cursor) ============ */
-/* The window itself is shrunk to ~60px via setBounds; OS title bar takes
- * ~28px and the remaining ~32px shows the editor's current cursor line.
- * CodeMirror auto-scrolls the cursor line into view, so no event-listening
- * or title-modifying logic is needed. We only:
- *  - hide the previous-note overlay (no room)
- *  - lock overflow on the editor scroller so the user can't scroll the
- *    cursor line out of view
- *  - hide the line-number gutter (already hidden globally, kept for clarity)
- */
-body.today-sticky-collapsed .today-sticky-prev-overlay {
-	display: none !important;
-}
-body.today-sticky-collapsed .cm-scroller {
-	overflow: hidden !important;
-}
-body.today-sticky-collapsed .cm-gutters {
-	display: none !important;
-}
-/* Buttons stay visible (they're already always-on); make them slightly
- * more solid so they're readable against the editor underneath. */
-body.today-sticky-collapsed .today-sticky-btn {
-	opacity: 0.7;
-	background: rgba(20, 20, 20, 0.5);
-	backdrop-filter: blur(8px);
-	-webkit-backdrop-filter: blur(8px);
 }

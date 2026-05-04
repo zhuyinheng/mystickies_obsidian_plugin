@@ -57,20 +57,6 @@ export default class TodayStickyPlugin extends Plugin {
 			}),
 		);
 
-		this.addCommand({
-			id: "today-sticky-debug-log",
-			name: "[Debug] Log today and most recent previous daily notes",
-			callback: async () => {
-				const today = await this.dailyNotes.getOrCreateToday();
-				const prev = this.dailyNotes.findMostRecentPrevious();
-				console.log("[today-sticky]", {
-					today: today?.path ?? null,
-					previous: prev?.path ?? null,
-					openStickies: this.stickies.count(),
-				});
-			},
-		});
-
 		this.app.workspace.onLayoutReady(() => {
 			void this.stickies.openToday();
 		});
