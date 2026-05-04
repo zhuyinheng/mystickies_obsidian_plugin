@@ -38,12 +38,15 @@ export interface StickyConfig {
 	alwaysOnTop: boolean;
 	visibleOnAllWorkspaces: boolean;
 	vibrancy: boolean;
+	hideTrafficLights: boolean;
 }
 
 export interface ElectronBrowserWindow {
 	setAlwaysOnTop: (flag: boolean, level?: string) => void;
 	setVisibleOnAllWorkspaces?: (flag: boolean, opts?: { visibleOnFullScreen?: boolean }) => void;
 	setVibrancy?: (type: string | null) => void;
+	setWindowButtonVisibility?: (visible: boolean) => void;
+	setTitleBarOverlay?: (opts: { color?: string; symbolColor?: string; height?: number }) => void;
 	minimize: () => void;
 	close: () => void;
 	isAlwaysOnTop: () => boolean;
@@ -67,12 +70,19 @@ export function configureStickyWindow(bw: ElectronBrowserWindow | null, config: 
 	} catch (e) {
 		console.warn("[today-sticky] setVisibleOnAllWorkspaces failed", e);
 	}
+	const platform = typeof process !== "undefined" ? process.platform : "";
 	try {
-		const platform = (typeof process !== "undefined" ? process.platform : "");
 		if (config.vibrancy && platform === "darwin") {
 			bw.setVibrancy?.("under-window");
 		}
 	} catch (e) {
 		console.warn("[today-sticky] setVibrancy failed", e);
+	}
+	try {
+		if (config.hideTrafficLights && platform === "darwin") {
+			bw.setWindowButtonVisibility?.(false);
+		}
+	} catch (e) {
+		console.warn("[today-sticky] setWindowButtonVisibility failed", e);
 	}
 }

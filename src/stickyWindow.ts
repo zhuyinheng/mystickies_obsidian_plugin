@@ -55,6 +55,7 @@ export class StickyWindow {
 			alwaysOnTop: true,
 			visibleOnAllWorkspaces: true,
 			vibrancy: true,
+			hideTrafficLights: true,
 		});
 
 		this.chrome = installChrome(
