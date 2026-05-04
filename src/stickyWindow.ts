@@ -7,7 +7,7 @@ import {
 	getPopoutWindow,
 	type ElectronBrowserWindow,
 } from "./electronWindow";
-import { ChromeHandle, installChrome } from "./chrome";
+import { installChrome } from "./chrome";
 import { FileTarget, type StickyTarget } from "./stickyTarget";
 import type { StickyManager } from "./stickyManager";
 
@@ -18,16 +18,11 @@ const OPACITY_FADE_MS = 180;
 export class StickyWindow {
 	private leaf: WorkspaceLeaf | null = null;
 	private bw: ElectronBrowserWindow | null = null;
-	private chrome: ChromeHandle | null = null;
 	private currentFile: TFile | null = null;
 	private pinned = true;
 	private closing = false;
-	private opacityCleanup: (() => void) | null = null;
-	private opacityRaf: number | null = null;
-	private linkInterceptCleanup: (() => void) | null = null;
-	private titleObserver: MutationObserver | null = null;
-	private bodyClassObserver: MutationObserver | null = null;
-	private resizeCleanup: (() => void) | null = null;
+	/** Cleanups registered by install* methods. Drained LIFO in close(). */
+	private cleanups: Array<() => void> = [];
 
 	constructor(
 		private plugin: TodayStickyPlugin,
@@ -62,21 +57,10 @@ export class StickyWindow {
 		await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 		this.bw = getBrowserWindowForLeaf(leaf);
-		this.pinned = true;
 		configureStickyWindow(this.bw);
 
-		this.chrome = installChrome(
-			leaf,
-			{
-				onClose: () => this.close(),
-				onTogglePin: () => this.togglePin(),
-				onOpenInMain: () => void this.openCurrentInMain(),
-			},
-			this.pinned,
-			file.basename,
-		);
-
-		this.installPopoutCloseListener();
+		this.installChromeBar(leaf, file.basename);
+		this.installPopoutCloseListener(leaf);
 		this.installOpacityHover(leaf);
 		this.installLinkInterceptor(leaf);
 		this.installTitleSuppressor(leaf);
@@ -91,34 +75,26 @@ export class StickyWindow {
 
 	/**
 	 * Tear down the sticky and force-close its BrowserWindow. Re-entrant safe:
-	 * bw.close() fires the popout's beforeunload, which calls close() again
+	 * bw.close() fires the popout's beforeunload, which triggers close() again
 	 * via installPopoutCloseListener — the `closing` flag short-circuits.
 	 */
 	close(): void {
 		if (this.closing) return;
 		this.closing = true;
 
-		if (this.opacityRaf !== null) {
-			window.cancelAnimationFrame(this.opacityRaf);
-			this.opacityRaf = null;
+		// LIFO drain so each install's teardown runs in reverse order of setup.
+		for (let i = this.cleanups.length - 1; i >= 0; i--) {
+			try {
+				this.cleanups[i]();
+			} catch (e) {
+				console.warn("[today-sticky] cleanup failed", e);
+			}
 		}
-		this.opacityCleanup?.();
-		this.opacityCleanup = null;
-		this.linkInterceptCleanup?.();
-		this.linkInterceptCleanup = null;
-		this.titleObserver?.disconnect();
-		this.titleObserver = null;
-		this.bodyClassObserver?.disconnect();
-		this.bodyClassObserver = null;
-		this.resizeCleanup?.();
-		this.resizeCleanup = null;
-		this.chrome?.uninstall();
-		this.chrome = null;
+		this.cleanups = [];
 
-		// Capture bw before nulling so we can still close the BrowserWindow.
-		// Obsidian 1.12's leaf.detach() does NOT tear down the surrounding
-		// popout BrowserWindow, and with native traffic lights hidden the
-		// user has no other way to close it — so close it explicitly.
+		// Detach the leaf, then force-close the BrowserWindow. Obsidian 1.12's
+		// leaf.detach() does not tear down the popout — without bw.close()
+		// it lingers chrome-less and uncloseable.
 		const bw = this.bw;
 		this.bw = null;
 		this.leaf?.detach();
@@ -151,11 +127,28 @@ export class StickyWindow {
 		await this.openFileInMain(this.currentFile);
 	}
 
-	private installPopoutCloseListener(): void {
-		const win = this.leaf ? getPopoutWindow(this.leaf) : null;
+	// ------------- install methods (each pushes a cleanup) ----------------
+
+	private installChromeBar(leaf: WorkspaceLeaf, title: string): void {
+		const uninstall = installChrome(
+			leaf,
+			{
+				onClose: () => this.close(),
+				onTogglePin: () => this.togglePin(),
+				onOpenInMain: () => void this.openCurrentInMain(),
+			},
+			this.pinned,
+			title,
+		);
+		this.cleanups.push(uninstall);
+	}
+
+	private installPopoutCloseListener(leaf: WorkspaceLeaf): void {
+		const win = getPopoutWindow(leaf);
 		if (!win) return;
 		const handler = () => this.close();
 		win.addEventListener("beforeunload", handler, { once: true });
+		// `once: true` makes this self-cleaning; nothing to push.
 	}
 
 	private installOpacityHover(leaf: WorkspaceLeaf): void {
@@ -165,131 +158,115 @@ export class StickyWindow {
 
 		this.bw.setOpacity(IDLE_OPACITY);
 
-		let currentTarget = IDLE_OPACITY;
-		let currentValue = IDLE_OPACITY;
-		const animateTo = (target: number) => {
-			currentTarget = target;
-			if (this.opacityRaf !== null) return;
+		let raf: number | null = null;
+		let target = IDLE_OPACITY;
+		let value = IDLE_OPACITY;
+		const animateTo = (next: number) => {
+			target = next;
+			if (raf !== null) return;
 			const start = performance.now();
-			const from = currentValue;
+			const from = value;
 			const tick = () => {
 				if (!this.bw?.setOpacity) {
-					this.opacityRaf = null;
+					raf = null;
 					return;
 				}
-				const elapsed = performance.now() - start;
-				const t = Math.min(1, elapsed / OPACITY_FADE_MS);
+				const t = Math.min(1, (performance.now() - start) / OPACITY_FADE_MS);
 				const eased = t * t * (3 - 2 * t);
-				const value = from + (currentTarget - from) * eased;
-				currentValue = value;
+				value = from + (target - from) * eased;
 				try {
 					this.bw.setOpacity(value);
 				} catch {
-					/* swallow */
+					/* */
 				}
 				if (t < 1) {
-					this.opacityRaf = popoutWin.requestAnimationFrame(tick);
+					raf = popoutWin.requestAnimationFrame(tick);
 				} else {
-					this.opacityRaf = null;
-					if (currentTarget !== currentValue) animateTo(currentTarget);
+					raf = null;
+					if (target !== value) animateTo(target);
 				}
 			};
-			this.opacityRaf = popoutWin.requestAnimationFrame(tick);
+			raf = popoutWin.requestAnimationFrame(tick);
 		};
 
 		const onEnter = () => animateTo(ACTIVE_OPACITY);
 		const onLeave = () => animateTo(IDLE_OPACITY);
-		const onFocus = () => animateTo(ACTIVE_OPACITY);
-		const onBlur = () => animateTo(IDLE_OPACITY);
-
 		const root = popoutWin.document.documentElement;
 		root.addEventListener("mouseenter", onEnter);
 		root.addEventListener("mouseleave", onLeave);
-		popoutWin.addEventListener("focus", onFocus);
-		popoutWin.addEventListener("blur", onBlur);
+		popoutWin.addEventListener("focus", onEnter);
+		popoutWin.addEventListener("blur", onLeave);
 
-		this.opacityCleanup = () => {
+		this.cleanups.push(() => {
+			if (raf !== null) {
+				try {
+					popoutWin.cancelAnimationFrame(raf);
+				} catch {
+					/* */
+				}
+				raf = null;
+			}
 			try {
 				root.removeEventListener("mouseenter", onEnter);
 				root.removeEventListener("mouseleave", onLeave);
-				popoutWin.removeEventListener("focus", onFocus);
-				popoutWin.removeEventListener("blur", onBlur);
+				popoutWin.removeEventListener("focus", onEnter);
+				popoutWin.removeEventListener("blur", onLeave);
 				this.bw?.setOpacity?.(1.0);
 			} catch {
-				/* */
+				/* window may be torn down */
 			}
-		};
+		});
 	}
 
 	/**
 	 * Intercept clicks inside the popout that would otherwise navigate. Both
-	 * inline `[[wiki]]` links AND `![[embed]]` embed titles/icons are
-	 * redirected: plain click → main Obsidian window, cmd/ctrl click → new
-	 * sticky window. The sticky's own leaf never changes file as a side
-	 * effect of clicking.
+	 * inline `[[wiki]]` links AND `![[embed]]` titles/icons are redirected:
+	 *  - plain click  → open in the main Obsidian window
+	 *  - cmd/ctrl+click → spawn a new sticky for the linked file
+	 * The sticky's leaf never changes file as a side effect of clicking.
 	 */
 	private installLinkInterceptor(leaf: WorkspaceLeaf): void {
 		const doc = getPopoutDocument(leaf);
 		if (!doc) return;
-
 		const handler = (ev: MouseEvent) => {
 			const target = ev.target as HTMLElement | null;
 			if (!target) return;
-
 			const linktext = this.extractClickedLinktext(target);
 			if (!linktext) return;
-
 			if (/^[a-z][a-z0-9+.-]*:\/\//i.test(linktext) && !linktext.startsWith("obsidian://")) return;
 
 			ev.preventDefault();
 			ev.stopImmediatePropagation();
-
-			const newSticky = ev.metaKey || ev.ctrlKey;
-			if (newSticky) {
+			if (ev.metaKey || ev.ctrlKey) {
 				void this.openLinkAsSticky(linktext);
 			} else {
 				void this.openLinkInMain(linktext);
 			}
 		};
-
 		doc.addEventListener("click", handler, true);
 		doc.addEventListener("auxclick", handler, true);
-		this.linkInterceptCleanup = () => {
+		this.cleanups.push(() => {
 			doc.removeEventListener("click", handler, true);
 			doc.removeEventListener("auxclick", handler, true);
-		};
+		});
 	}
 
-	/**
-	 * Returns the link path string for a click target, or null if the click
-	 * isn't a navigation gesture.
-	 *  - Embed title / link icon → climb to the wrapping `.markdown-embed`
-	 *    or `.internal-embed` and read its `src` attr.
-	 *  - Plain wiki/internal link → read `data-href` (reading mode) or hit
-	 *    the `.cm-hmd-internal-link` source-mode marker.
-	 */
 	private extractClickedLinktext(target: HTMLElement): string | null {
-		const embedTrigger = target.closest(
-			".markdown-embed-title, .markdown-embed-link",
-		) as HTMLElement | null;
+		// Embed title / link icon → climb to wrapping embed and read its src.
+		const embedTrigger = target.closest(".markdown-embed-title, .markdown-embed-link") as HTMLElement | null;
 		if (embedTrigger) {
-			const embedWrap = embedTrigger.closest(
-				".markdown-embed, .internal-embed",
-			) as HTMLElement | null;
+			const embedWrap = embedTrigger.closest(".markdown-embed, .internal-embed") as HTMLElement | null;
 			const src = embedWrap?.getAttribute("src") ?? embedWrap?.getAttribute("alt");
 			if (src) return src;
 		}
-
-		const link = target.closest(
-			"a.internal-link, a[data-href], .cm-hmd-internal-link",
-		) as HTMLElement | null;
+		// Plain wiki / internal link.
+		const link = target.closest("a.internal-link, a[data-href], .cm-hmd-internal-link") as HTMLElement | null;
 		if (link) {
 			return link.getAttribute("data-href")
 				|| link.getAttribute("href")
 				|| (link.textContent ?? "").trim()
 				|| null;
 		}
-
 		return null;
 	}
 
@@ -300,9 +277,7 @@ export class StickyWindow {
 
 	private async openFileInMain(file: TFile): Promise<void> {
 		const mainLeaves: WorkspaceLeaf[] = [];
-		this.plugin.app.workspace.iterateRootLeaves((l) => {
-			mainLeaves.push(l);
-		});
+		this.plugin.app.workspace.iterateRootLeaves((l) => mainLeaves.push(l));
 		const mainLeaf = mainLeaves[0];
 		if (!mainLeaf) {
 			new Notice("Today's Note Sticky: no main Obsidian leaf available.");
@@ -335,32 +310,21 @@ export class StickyWindow {
 		await this.manager.openTarget(new FileTarget(file.path));
 	}
 
-	/**
-	 * Keep the OS title bar text empty so the popout reads as a true sticky
-	 * tile. Obsidian writes "<file> - <vault> - Obsidian" into document.title
-	 * on every file change; we observe and reset.
-	 */
+	/** Suppress the OS title bar text — Obsidian rewrites it on every file change. */
 	private installTitleSuppressor(leaf: WorkspaceLeaf): void {
 		const doc = getPopoutDocument(leaf);
-		if (!doc) return;
-		const titleEl = doc.querySelector("title");
+		const titleEl = doc?.querySelector("title");
 		if (!titleEl) return;
 		titleEl.textContent = "";
 		const obs = new MutationObserver(() => {
-			if (titleEl.textContent && titleEl.textContent.length > 0) {
-				titleEl.textContent = "";
-			}
+			if (titleEl.textContent) titleEl.textContent = "";
 		});
 		obs.observe(titleEl, { childList: true, characterData: true, subtree: true });
-		this.titleObserver = obs;
+		this.cleanups.push(() => obs.disconnect());
 	}
 
-	/**
-	 * Keep `today-sticky-popout` on the popout's body. Obsidian rebuilds /
-	 * reassigns body.className on certain layout transitions (notably window
-	 * resize), which would otherwise drop our class and let all the hidden
-	 * tab/header chrome flash back in.
-	 */
+	/** Re-add `today-sticky-popout` to the popout body if Obsidian removes it
+	 *  during a layout transition (e.g. resize). */
 	private installBodyClassGuard(leaf: WorkspaceLeaf): void {
 		const doc = getPopoutDocument(leaf);
 		if (!doc) return;
@@ -372,15 +336,11 @@ export class StickyWindow {
 		ensure();
 		const obs = new MutationObserver(ensure);
 		obs.observe(doc.body, { attributes: true, attributeFilter: ["class"] });
-		this.bodyClassObserver = obs;
+		this.cleanups.push(() => obs.disconnect());
 	}
 
-	/**
-	 * Listen for popout window resize and persist the latest size to plugin
-	 * settings. Debounced 500ms because resize fires every pixel during drag.
-	 * Only the size from the most recent resize wins; old open stickies are
-	 * not affected — only the NEXT new sticky reads this size.
-	 */
+	/** Persist popout's last innerWidth/innerHeight (debounced) so the next
+	 *  new sticky opens at the same size. */
 	private installResizeTracker(leaf: WorkspaceLeaf): void {
 		const popoutWin = getPopoutWindow(leaf);
 		if (!popoutWin) return;
@@ -395,21 +355,20 @@ export class StickyWindow {
 			}, 500);
 		};
 		popoutWin.addEventListener("resize", handler);
-		this.resizeCleanup = () => {
+		this.cleanups.push(() => {
 			if (timer !== null) {
 				try {
 					popoutWin.clearTimeout(timer);
 				} catch {
 					/* */
 				}
-				timer = null;
 			}
 			try {
 				popoutWin.removeEventListener("resize", handler);
 			} catch {
 				/* */
 			}
-		};
+		});
 	}
 
 	private isLeafAttached(leaf: WorkspaceLeaf): boolean {

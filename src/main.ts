@@ -1,5 +1,4 @@
 import { MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
-import { DailyNotes } from "./dailyNotes";
 import { StickyManager } from "./stickyManager";
 import { FileTarget } from "./stickyTarget";
 import { getBrowserWindowForLeaf } from "./electronWindow";
@@ -17,14 +16,12 @@ const DEFAULT_SETTINGS: StickySettings = {
 };
 
 export default class TodayStickyPlugin extends Plugin {
-	dailyNotes!: DailyNotes;
 	stickies!: StickyManager;
 	settings!: StickySettings;
 
 	async onload() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 
-		this.dailyNotes = new DailyNotes(this.app);
 		this.stickies = new StickyManager(this);
 
 		this.addCommand({

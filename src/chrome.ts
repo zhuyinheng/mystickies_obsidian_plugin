@@ -7,20 +7,18 @@ export interface ChromeCallbacks {
 	onOpenInMain: () => void;
 }
 
-export interface ChromeHandle {
-	uninstall: () => void;
-}
-
+/**
+ * Inject the sticky's chrome (titlebar with file name + drag region + 3
+ * buttons) into the popout's document. Returns the uninstall function.
+ */
 export function installChrome(
 	leaf: WorkspaceLeaf,
 	callbacks: ChromeCallbacks,
 	initialPinned: boolean,
-	initialTitle: string,
-): ChromeHandle {
+	title: string,
+): () => void {
 	const doc = getPopoutDocument(leaf);
-	if (!doc) {
-		return { uninstall: () => {} };
-	}
+	if (!doc) return () => {};
 
 	doc.body.classList.add("today-sticky-popout");
 
@@ -32,14 +30,13 @@ export function installChrome(
 
 	const titleEl = doc.createElement("span");
 	titleEl.className = "today-sticky-title";
-	titleEl.textContent = initialTitle;
+	titleEl.textContent = title;
 	drag.appendChild(titleEl);
 
 	bar.appendChild(drag);
 
 	const pinBtn = makeBtn(doc, "today-sticky-btn pin", "●", () => {
-		const next = callbacks.onTogglePin();
-		updatePinBtn(pinBtn, next);
+		updatePinBtn(pinBtn, callbacks.onTogglePin());
 	});
 	updatePinBtn(pinBtn, initialPinned);
 
@@ -52,14 +49,11 @@ export function installChrome(
 	bar.appendChild(pinBtn);
 	bar.appendChild(openMainBtn);
 	bar.appendChild(closeBtn);
-
 	doc.body.prepend(bar);
 
-	return {
-		uninstall: () => {
-			bar.remove();
-			doc.body.classList.remove("today-sticky-popout");
-		},
+	return () => {
+		bar.remove();
+		doc.body.classList.remove("today-sticky-popout");
 	};
 }
 

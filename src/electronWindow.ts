@@ -21,17 +21,10 @@ export function getBrowserWindowForLeaf(leaf: WorkspaceLeaf): ElectronBrowserWin
 	if (!req) return null;
 	try {
 		const remote = req("@electron/remote") as { getCurrentWindow?: () => ElectronBrowserWindow };
-		if (remote?.getCurrentWindow) return remote.getCurrentWindow();
+		return remote?.getCurrentWindow?.() ?? null;
 	} catch {
-		/* fall through */
+		return null;
 	}
-	try {
-		const electron = req("electron") as { remote?: { getCurrentWindow?: () => ElectronBrowserWindow } };
-		if (electron?.remote?.getCurrentWindow) return electron.remote.getCurrentWindow();
-	} catch {
-		/* fall through */
-	}
-	return null;
 }
 
 export interface ElectronBrowserWindow {

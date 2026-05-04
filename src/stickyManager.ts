@@ -9,7 +9,7 @@ export class StickyManager {
 	constructor(private plugin: TodayStickyPlugin) {}
 
 	async openToday(): Promise<void> {
-		await this.openTarget(new TodayTarget(this.plugin.dailyNotes));
+		await this.openTarget(new TodayTarget());
 	}
 
 	async openFile(file: TFile): Promise<void> {

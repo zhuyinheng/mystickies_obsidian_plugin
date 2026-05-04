@@ -1,5 +1,13 @@
-import { App, TFile } from "obsidian";
-import type { DailyNotes } from "./dailyNotes";
+import { App, TFile, moment as obsMoment } from "obsidian";
+import type { Moment } from "moment";
+import {
+	appHasDailyNotesPluginLoaded,
+	createDailyNote,
+	getAllDailyNotes,
+	getDailyNote,
+} from "obsidian-daily-notes-interface";
+
+const moment = obsMoment as unknown as () => Moment;
 
 export interface StickyTarget {
 	/** Stable key used by the manager for dedup. */
@@ -8,13 +16,20 @@ export interface StickyTarget {
 	resolve(app: App): Promise<TFile | null>;
 }
 
+/**
+ * Resolves to today's daily note. Auto-creates it from the Daily Notes
+ * core plugin's template if it does not yet exist. The only "specialness"
+ * still attached to today is this auto-create on first access — the popout
+ * itself behaves identically to any FileTarget once the file is resolved.
+ */
 export class TodayTarget implements StickyTarget {
 	readonly key = "@today";
 
-	constructor(private dailyNotes: DailyNotes) {}
-
-	resolve(): Promise<TFile | null> {
-		return this.dailyNotes.getOrCreateToday();
+	async resolve(): Promise<TFile | null> {
+		if (!appHasDailyNotesPluginLoaded()) return null;
+		const today = moment();
+		const all = getAllDailyNotes();
+		return getDailyNote(today, all) ?? (await createDailyNote(today));
 	}
 }
 
