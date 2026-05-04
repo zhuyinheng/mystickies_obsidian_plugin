@@ -19,6 +19,8 @@ body.today-sticky-popout .view-header-icon,
 body.today-sticky-popout .view-header-title-container,
 body.today-sticky-popout .view-actions,
 body.today-sticky-popout .status-bar,
+body.today-sticky-popout .inline-title,
+body.today-sticky-popout .embedded-backlinks,
 body.today-sticky-popout .mod-root > .workspace-split:not(.mod-vertical):not(.mod-horizontal) {
 	display: none !important;
 }
