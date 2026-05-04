@@ -29,6 +29,12 @@ export function installChrome(
 	const bar = doc.createElement("div");
 	bar.className = "today-sticky-topbar";
 
+	// Spacer absorbs the leftover space and is the actual drag region.
+	// Buttons opt out via -webkit-app-region: no-drag in CSS.
+	const drag = doc.createElement("div");
+	drag.className = "today-sticky-drag";
+	bar.appendChild(drag);
+
 	const pinBtn = makeBtn(doc, "today-sticky-btn pin", "●", () => {
 		const next = callbacks.onTogglePin();
 		updatePinBtn(pinBtn, next);

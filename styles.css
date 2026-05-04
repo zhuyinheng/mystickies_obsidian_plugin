@@ -77,27 +77,37 @@ body.today-sticky-popout .markdown-preview-view {
 	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
-/* No reserved strip above the editor; content fills full window from y=0. */
+/* Reserve the 18px drag/title strip at the top of the editor area. */
 body.today-sticky-popout .horizontal-main-container,
 body.today-sticky-popout .app-container {
-	padding-top: 0;
+	padding-top: 18px;
 }
 
-/* ============ Top-right button cluster ============ */
-/* Always visible, only on the right side; small and unobtrusive. The
- * window itself is still draggable from the OS title bar area above the
- * webview, so we don't need our own drag region. */
+/* ============ Always-visible 18px drag strip + right-aligned buttons ====== */
+/* Full-width 18px bar pinned to top. Consistent dark backdrop matching the
+ * rest of the popout's translucent style; doesn't fade based on hover. The
+ * whole bar is the drag region (via the .today-sticky-drag spacer that fills
+ * the leftover space); buttons opt out with no-drag. */
 .today-sticky-topbar {
 	position: fixed;
-	top: 4px;
-	right: 4px;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 18px;
 	display: flex;
 	align-items: center;
-	gap: 2px;
-	background: transparent;
+	background: rgba(20, 20, 20, 0.55);
 	z-index: 9999;
 	-webkit-user-select: none;
 	user-select: none;
+	gap: 1px;
+	padding: 0 2px;
+}
+
+.today-sticky-drag {
+	flex: 1;
+	height: 100%;
+	-webkit-app-region: drag;
 }
 
 .today-sticky-btn {
@@ -116,7 +126,7 @@ body.today-sticky-popout .app-container {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	opacity: 0.35;
+	opacity: 0.5;
 	transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
 }
 .today-sticky-btn:hover {
