@@ -78,30 +78,34 @@ body.today-sticky-popout .today-sticky-prev-body {
 	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
-/* Push content down a bit so the auto-hiding bar / OS traffic lights breathe */
+/* Top bar is position:fixed and transparent in idle state; content fills the
+ * full window from y=0 so there's no reserved empty strip above the editor.
+ * On hover the bar's translucent backdrop briefly overlaps the first line. */
 body.today-sticky-popout .horizontal-main-container,
 body.today-sticky-popout .app-container {
-	padding-top: 24px;
+	padding-top: 0;
 }
 
 /* ============ Auto-hiding top bar ============ */
-/* The bar is always 28px tall (so the drag region works everywhere along the
- * top), but background and buttons are invisible until hover. */
+/* Tiny 8px slim region by default — barely visible, just enough drag area
+ * and hover-trigger height. Expands to 28px on hover to reveal buttons. */
 .today-sticky-topbar {
 	position: fixed;
 	top: 0;
 	left: 0;
 	right: 0;
-	height: 24px;
+	height: 8px;
 	display: flex;
-	align-items: center;
+	align-items: stretch;
 	background: transparent;
 	z-index: 9999;
 	-webkit-user-select: none;
 	user-select: none;
-	transition: background 0.18s ease, backdrop-filter 0.18s ease;
+	overflow: hidden;
+	transition: height 0.2s ease, background 0.18s ease, backdrop-filter 0.18s ease;
 }
 .today-sticky-topbar:hover {
+	height: 28px;
 	background: rgba(20, 20, 20, 0.55);
 	backdrop-filter: blur(14px);
 	-webkit-backdrop-filter: blur(14px);
@@ -142,13 +146,14 @@ body.today-sticky-collapsed .today-sticky-title {
 .today-sticky-btn {
 	-webkit-app-region: no-drag;
 	width: 28px;
-	height: 24px;
+	height: 28px;
+	flex-shrink: 0;
 	border: none;
 	background: transparent;
 	color: var(--text-muted, #aaa);
 	cursor: pointer;
 	font-size: 12px;
-	line-height: 24px;
+	line-height: 28px;
 	padding: 0;
 	display: flex;
 	align-items: center;
@@ -268,9 +273,8 @@ body.today-sticky-popout .cm-content {
 }
 
 /* ============ Collapsed mode (single-line title bar) ============ */
-/* When collapsed, hide everything except the top bar. The OS-level
- * setBounds shrinks the window to ~32px high; this CSS makes sure no
- * editor / overlay leaks through if window resize lags. */
+/* When collapsed, expand the top bar to fill the 32px window and hide the
+ * editor/overlay below. */
 body.today-sticky-collapsed .horizontal-main-container,
 body.today-sticky-collapsed .app-container,
 body.today-sticky-collapsed .workspace,
@@ -279,10 +283,11 @@ body.today-sticky-collapsed .today-sticky-prev-overlay {
 	display: none !important;
 }
 body.today-sticky-collapsed .today-sticky-topbar {
+	height: 32px;
 	background: rgba(20, 20, 20, 0.7);
 	backdrop-filter: blur(14px);
 	-webkit-backdrop-filter: blur(14px);
 }
-body.today-sticky-collapsed .today-sticky-topbar .today-sticky-btn {
+body.today-sticky-collapsed .today-sticky-btn {
 	opacity: 0.85;
 }

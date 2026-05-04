@@ -54,10 +54,14 @@ export class PreviousOverlay extends Component {
 		const header = this.container.createDiv("today-sticky-prev-header");
 		const arrow = header.createSpan("today-sticky-prev-arrow");
 		arrow.textContent = "← ";
-		const link = header.createEl("a", { cls: "today-sticky-prev-link", text: prev.basename });
-		link.addEventListener("click", (ev) => {
-			ev.preventDefault();
-			this.app.workspace.openLinkText(prev.path, "", false);
+		// Marked as internal-link with data-href so the popout's document-level
+		// click interceptor (in stickyWindow.ts) handles it: plain click opens
+		// the link in the main Obsidian window; cmd/ctrl click spawns a new
+		// sticky for that file. No inline handler — bubbles up to interceptor.
+		header.createEl("a", {
+			cls: "today-sticky-prev-link internal-link",
+			text: prev.basename,
+			attr: { "data-href": prev.path, href: prev.path },
 		});
 
 		const body = this.container.createDiv("today-sticky-prev-body markdown-rendered");
