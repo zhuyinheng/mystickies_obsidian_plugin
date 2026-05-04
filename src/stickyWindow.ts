@@ -1,4 +1,4 @@
-import { Notice, TAbstractFile, TFile, WorkspaceLeaf, debounce } from "obsidian";
+import { MarkdownView, Notice, TAbstractFile, TFile, WorkspaceLeaf, debounce } from "obsidian";
 import type TodayStickyPlugin from "./main";
 import {
 	configureStickyWindow,
@@ -177,6 +177,9 @@ export class StickyWindow {
 			if (this.collapsed) {
 				this.expandedBounds = this.bw.getBounds();
 				this.bw.setBounds({ height: COLLAPSED_HEIGHT });
+				// Window resize alone does not re-position CodeMirror's
+				// scroll. Pull the cursor line into the new tiny viewport.
+				this.scrollCursorIntoView();
 			} else if (this.expandedBounds) {
 				this.bw.setBounds({ height: this.expandedBounds.height });
 				this.expandedBounds = null;
@@ -186,6 +189,17 @@ export class StickyWindow {
 		}
 		this.chrome?.setCollapsed(this.collapsed);
 		return this.collapsed;
+	}
+
+	private scrollCursorIntoView(): void {
+		const view = this.leaf?.view;
+		if (!(view instanceof MarkdownView) || !view.editor) return;
+		try {
+			const cursor = view.editor.getCursor();
+			view.editor.scrollIntoView({ from: cursor, to: cursor }, true);
+		} catch (e) {
+			console.warn("[today-sticky] scrollCursorIntoView failed", e);
+		}
 	}
 
 	private async refreshOverlay(): Promise<void> {
