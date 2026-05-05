@@ -6,13 +6,8 @@ Always-on-top sticky windows for Obsidian notes.
 
 ## Features
 
-- **Today's daily note as a sticky** — from the ribbon, the command palette, or automatically on Obsidian launch.
-- **Open any note as a sticky** — right-click → *Open as sticky*, or run *Open current note as sticky*.
-- **Embed-click redirects** — clicking inside an embedded note jumps to it in the main window instead of cluttering the sticky.
-- **Internal links open in the main window** — keeps the sticky focused on one note.
-- **Persistent size** — the sticky remembers its last width and height across sessions.
-- **Close all stickies** in one command.
-- **Go to main** button in the title bar focuses the main Obsidian window.
+- **Always on top, dims when inactive** — the sticky stays above other windows and fades to a low opacity when it loses focus, so it's there when you glance at it but stays out of the way while you work elsewhere.
+- **Embed links jump to the source** — clicking an `![[embed]]` header opens that note in the main Obsidian window instead of inside the sticky. Handy when the sticky is a daily note that pulls in pieces of other notes.
 
 ## Install from a release
 
