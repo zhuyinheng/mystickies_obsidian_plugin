@@ -2,6 +2,8 @@
 
 MyStickies opens Obsidian notes in small always-on-top sticky windows. It can open today's daily note by shortcut, open the current note as a sticky, and open linked notes in either the main window or another sticky.
 
+![demo](docs/demo.gif)
+
 ## Install from a release
 
 Run the installer from the root of an Obsidian vault. The current directory must contain `.obsidian`.
