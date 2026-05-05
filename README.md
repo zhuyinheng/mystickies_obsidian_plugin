@@ -6,8 +6,9 @@ Always-on-top sticky windows for Obsidian notes.
 
 ## Features
 
-- **Always on top, dims when inactive** — the sticky stays above other windows and fades to a low opacity when it loses focus, so it's there when you glance at it but stays out of the way while you work elsewhere.
-- **Embed links jump to the source** — clicking an `![[embed]]` header opens that note in the main Obsidian window instead of inside the sticky. Handy when the sticky is a daily note that pulls in pieces of other notes.
+- **Always on top, dims when inactive** — the sticky stays above other windows and fades to a low opacity when it loses focus.
+- **Embeds for inline preview** — `![[other-note]]` renders inside the sticky as a compact card. Useful when the sticky is today's daily note and you want yesterday's note in view at the same time.
+- **Link clicks don't navigate the sticky** — a plain click on `[[wiki]]` or an embed header opens the linked note in the **main** Obsidian window; **Cmd/Ctrl + click** opens it as a **new sticky**. The sticky itself always stays on its own note.
 
 ## Install from a release
 
