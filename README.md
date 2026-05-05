@@ -1,8 +1,18 @@
 # MyStickies
 
-MyStickies opens Obsidian notes in small always-on-top sticky windows. It can open today's daily note by shortcut, open the current note as a sticky, and open linked notes in either the main window or another sticky.
+Always-on-top sticky windows for Obsidian notes.
 
 ![demo](docs/demo.gif)
+
+## Features
+
+- **Today's daily note as a sticky** — from the ribbon, the command palette, or automatically on Obsidian launch.
+- **Open any note as a sticky** — right-click → *Open as sticky*, or run *Open current note as sticky*.
+- **Embed-click redirects** — clicking inside an embedded note jumps to it in the main window instead of cluttering the sticky.
+- **Internal links open in the main window** — keeps the sticky focused on one note.
+- **Persistent size** — the sticky remembers its last width and height across sessions.
+- **Close all stickies** in one command.
+- **Go to main** button in the title bar focuses the main Obsidian window.
 
 ## Install from a release
 
